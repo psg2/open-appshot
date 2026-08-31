@@ -2,9 +2,9 @@
 
 Open AppShot captures the last active macOS window as pixels and Accessibility context. It keeps a local history and writes both representations to the clipboard for use in any chat or agent UI.
 
-Version 0.3.0 makes Open AppShot a menu bar utility. Its global shortcut and confirmation sound are configurable, the history supports direct deletion with confirmation, and Command-W closes the window without quitting the capture service. The app remains capture-only. It cannot click, type, scroll, or invoke UI actions.
+Version 0.3.1 installs as `Open AppShot.app`, adds keyboard commands for capture history, and keeps deletion behind a confirmation. Its global shortcut and confirmation sound are configurable, and Command-W closes the window without quitting the capture service. The app remains capture-only. It cannot click, type, scroll, or invoke UI actions.
 
-The installed bundle is still named `AppShot Clipboard POC.app` and keeps `com.psg2.AppShotClipboardPOC`. The display name is Open AppShot. Preserving the bundle ID avoids invalidating the macOS permissions granted during the prototype.
+The installed bundle and executable are named Open AppShot. The app keeps the legacy bundle identifier `com.psg2.AppShotClipboardPOC` so macOS can reuse permissions granted to the prototype.
 
 ## Requirements
 
@@ -37,7 +37,7 @@ make hotkey-smoke
 
 ## First run
 
-1. Open `/Applications/AppShot Clipboard POC.app`.
+1. Open `/Applications/Open AppShot.app`.
 2. In the permission banner or Settings, choose **Request Missing Permissions**.
 3. Enable Open AppShot under System Settings > Privacy & Security > Accessibility and Screen & System Audio Recording.
 4. Quit and reopen the app if macOS requests it.
@@ -56,6 +56,16 @@ The main window has a capture filmstrip on the left and two previews on the righ
 The context rail under the preview reports the image dimensions, AX element count, and storage source. The toolbar can capture the last active window, reload history, copy either representation, reveal the capture in Finder, or delete it. Hover or select a capture in the sidebar to reveal its delete button; deletion always requires confirmation.
 
 Open AppShot lives in the menu bar instead of the Dock. Command-W closes its current window while leaving the global shortcut active. Use the menu bar icon to reopen the history, capture immediately, or open Settings.
+
+The Capture menu exposes the window commands and their shortcuts:
+
+- Shift-Command-C captures the last active window;
+- Option-Command-C copies the selected screenshot and context;
+- Option-Command-I copies the selected screenshot;
+- Option-Command-T copies the selected Accessibility context;
+- Shift-Command-R reveals the selected capture in Finder;
+- Command-R reloads the history;
+- Delete asks to remove the selected capture.
 
 Open Settings with Command-comma to:
 
@@ -117,4 +127,4 @@ Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the current boundaries and
 - Local repository only. No Git remote is configured.
 - No open-source license has been selected.
 - Local builds use an ad hoc signature with a stable identifier-only designated requirement.
-- Public distribution still needs Developer ID signing, notarization, and a final bundle-name migration.
+- Public distribution still needs Developer ID signing and notarization.

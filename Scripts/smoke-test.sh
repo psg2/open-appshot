@@ -3,8 +3,8 @@ set -euo pipefail
 
 SCRIPT_DIR="${0:A:h}"
 REPO_ROOT="${SCRIPT_DIR:h}"
-APP_PATH="$REPO_ROOT/build/AppShot Clipboard POC.app"
-BINARY="$APP_PATH/Contents/MacOS/AppShotClipboardPOC"
+APP_PATH="$REPO_ROOT/build/Open AppShot.app"
+BINARY="$APP_PATH/Contents/MacOS/OpenAppShot"
 FIXTURE_BINARY="$REPO_ROOT/build/capture-fixture"
 
 if [[ ! -x "$BINARY" ]]; then

@@ -4,9 +4,11 @@ set -euo pipefail
 SCRIPT_DIR="${0:A:h}"
 REPO_ROOT="${SCRIPT_DIR:h}"
 BUILD_ROOT="$REPO_ROOT/build"
-APP_PATH="$BUILD_ROOT/AppShot Clipboard POC.app"
+APP_PATH="$BUILD_ROOT/Open AppShot.app"
+LEGACY_APP_PATH="$BUILD_ROOT/AppShot Clipboard POC.app"
 
 rm -rf "$APP_PATH"
+rm -rf "$LEGACY_APP_PATH"
 mkdir -p "$APP_PATH/Contents/MacOS"
 
 xcrun swiftc \
@@ -18,7 +20,7 @@ xcrun swiftc \
   -framework SwiftUI \
   -framework UniformTypeIdentifiers \
   "$REPO_ROOT/Sources/OpenAppShot/"*.swift \
-  -o "$APP_PATH/Contents/MacOS/AppShotClipboardPOC"
+  -o "$APP_PATH/Contents/MacOS/OpenAppShot"
 
 cp "$REPO_ROOT/Resources/Info.plist" "$APP_PATH/Contents/Info.plist"
 codesign \

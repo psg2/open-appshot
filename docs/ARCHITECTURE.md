@@ -2,7 +2,7 @@
 
 ## Scope
 
-Open AppShot 0.3.0 observes the last active macOS window after a user gesture. It stores and displays the resulting pixels and Accessibility context. It cannot act on the captured UI.
+Open AppShot 0.3.1 observes the last active macOS window after a user gesture. It stores and displays the resulting pixels and Accessibility context. It cannot act on the captured UI.
 
 ## App structure
 
@@ -53,7 +53,7 @@ The directory uses mode `0700`; files use `0600`. `metadata.json` is the stable 
 
 ## UI state
 
-`AppModel` scans the configured capture root, the default root when a custom destination is active, and the legacy POC root. It keeps the current selection, permission status, capture progress, storage location, retention, sound, hotkey, and clipboard preferences. A completed hotkey capture refreshes history and selects the new record.
+`AppModel` scans the configured capture root, the default root when a custom destination is active, and the legacy POC root. It keeps the current selection, pending deletion, permission status, capture progress, storage location, retention, sound, hotkey, and clipboard preferences. A completed hotkey capture refreshes history and selects the new record.
 
 The native UI has four visible boundaries:
 
@@ -72,11 +72,12 @@ Accessibility permission covers the global keyboard monitor and AX inspection. S
 
 The app uses the accessory activation policy and `LSUIElement` so it appears in the menu bar without a permanent Dock icon. Closing a window does not release its controller or terminate the process, which keeps the status item and hotkey available.
 
+Local builds install as `/Applications/Open AppShot.app` with the `OpenAppShot` executable. The legacy `com.psg2.AppShotClipboardPOC` bundle identifier remains part of the signing requirement so existing TCC permissions continue to match. The installer removes the old POC-named bundle after it verifies the renamed app.
+
 Local builds are ad hoc signed with an identifier-only designated requirement. The requirement stays stable across rebuilds but does not provide production-grade identity. Public distribution requires Developer ID signing and notarization.
 
 ## Decisions still open
 
-- Final `.app` filename and migration of the installed prototype
 - Developer ID ownership and release signing
 - License
 - Supported Peekaboo version range

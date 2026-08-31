@@ -99,10 +99,19 @@ struct CaptureHotkey: Codable, Equatable {
 
     static func isReserved(_ hotkey: CaptureHotkey) -> Bool {
         guard hotkey.kind == .keyboard,
-              hotkey.modifiers == [.command],
               let keyCode = hotkey.keyCode
         else { return false }
-        return [0, 4, 8, 12, 13, 43, 46].contains(keyCode)
+
+        switch hotkey.modifiers {
+        case [.command]:
+            return [0, 4, 8, 12, 13, 15, 43, 46].contains(keyCode)
+        case [.command, .shift]:
+            return [8, 15].contains(keyCode)
+        case [.command, .option]:
+            return [8, 17, 34].contains(keyCode)
+        default:
+            return false
+        }
     }
 
     private var modifierSymbols: String {
@@ -226,7 +235,8 @@ enum CapturePreferences {
     static var captureHotkey: CaptureHotkey {
         get {
             guard let data = defaults.data(forKey: captureHotkeyKey),
-                  let hotkey = try? JSONDecoder().decode(CaptureHotkey.self, from: data)
+                  let hotkey = try? JSONDecoder().decode(CaptureHotkey.self, from: data),
+                  !CaptureHotkey.isReserved(hotkey)
             else { return .dualOption }
             return hotkey
         }
@@ -313,6 +323,7 @@ enum CaptureHistory {
 final class AppModel: ObservableObject {
     @Published private(set) var captures: [CaptureRecord] = []
     @Published var selectedCaptureID: String?
+    @Published var deletionCandidate: CaptureRecord?
     @Published var previewMode: CapturePreviewMode = .screenshot
     @Published private(set) var accessibilityGranted = false
     @Published private(set) var screenRecordingGranted = false
@@ -430,6 +441,20 @@ final class AppModel: ObservableObject {
 
     func reveal(_ record: CaptureRecord) {
         NSWorkspace.shared.activateFileViewerSelecting([record.contextURL])
+    }
+
+    func requestDeletion(_ record: CaptureRecord) {
+        deletionCandidate = record
+    }
+
+    func cancelDeletion() {
+        deletionCandidate = nil
+    }
+
+    func confirmDeletion() {
+        guard let record = deletionCandidate else { return }
+        deletionCandidate = nil
+        delete(record)
     }
 
     func delete(_ record: CaptureRecord) {

@@ -593,7 +593,7 @@ enum ClipboardWriter {
     }
 }
 
-private final class AppDelegate: NSObject, NSApplicationDelegate {
+private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private lazy var model = AppModel()
     private lazy var mainWindowController = MainWindowController(model: model)
     private lazy var settingsWindowController = SettingsWindowController(model: model)
@@ -713,14 +713,64 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let captureItem = NSMenuItem()
         let captureMenu = NSMenu(title: "Capture")
-        let captureNowItem = targetedMenuItem(title: "Capture Last Active Window", action: #selector(captureNow), keyEquivalent: "c")
-        captureNowItem.keyEquivalentModifierMask = [.command, .shift]
-        captureMenu.addItem(captureNowItem)
+        captureMenu.addItem(
+            targetedMenuItem(
+                title: "Capture Last Active Window",
+                action: #selector(captureNow),
+                keyEquivalent: "c",
+                modifierMask: [.command, .shift]
+            )
+        )
         captureMenu.addItem(.separator())
-        captureMenu.addItem(targetedMenuItem(title: "Copy Screenshot and Context", action: #selector(copyCombined)))
-        captureMenu.addItem(targetedMenuItem(title: "Copy Screenshot", action: #selector(copyScreenshot)))
-        captureMenu.addItem(targetedMenuItem(title: "Copy Accessibility Context", action: #selector(copyContext)))
-        captureMenu.addItem(targetedMenuItem(title: "Reveal Last Capture", action: #selector(revealLastCapture)))
+        captureMenu.addItem(
+            targetedMenuItem(
+                title: "Copy Screenshot and Context",
+                action: #selector(copySelectedCombined),
+                keyEquivalent: "c",
+                modifierMask: [.command, .option]
+            )
+        )
+        captureMenu.addItem(
+            targetedMenuItem(
+                title: "Copy Screenshot",
+                action: #selector(copySelectedScreenshot),
+                keyEquivalent: "i",
+                modifierMask: [.command, .option]
+            )
+        )
+        captureMenu.addItem(
+            targetedMenuItem(
+                title: "Copy Accessibility Context",
+                action: #selector(copySelectedContext),
+                keyEquivalent: "t",
+                modifierMask: [.command, .option]
+            )
+        )
+        captureMenu.addItem(.separator())
+        captureMenu.addItem(
+            targetedMenuItem(
+                title: "Reveal in Finder",
+                action: #selector(revealSelectedCapture),
+                keyEquivalent: "r",
+                modifierMask: [.command, .shift]
+            )
+        )
+        captureMenu.addItem(
+            targetedMenuItem(
+                title: "Reload History",
+                action: #selector(reloadHistory),
+                keyEquivalent: "r"
+            )
+        )
+        captureMenu.addItem(.separator())
+        captureMenu.addItem(
+            targetedMenuItem(
+                title: "Delete Capture…",
+                action: #selector(deleteSelectedCapture),
+                keyEquivalent: "\u{7F}",
+                modifierMask: []
+            )
+        )
         captureItem.submenu = captureMenu
         mainMenu.addItem(captureItem)
 
@@ -754,11 +804,35 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
     private func targetedMenuItem(
         title: String,
         action: Selector,
-        keyEquivalent: String = ""
+        keyEquivalent: String = "",
+        modifierMask: NSEvent.ModifierFlags? = nil
     ) -> NSMenuItem {
         let item = NSMenuItem(title: title, action: action, keyEquivalent: keyEquivalent)
+        if let modifierMask { item.keyEquivalentModifierMask = modifierMask }
         item.target = self
         return item
+    }
+
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if menuItem.action == #selector(captureNow) {
+            return model.isReady && !captureInProgress
+        }
+
+        let selectionActions: [Selector] = [
+            #selector(copySelectedCombined),
+            #selector(copySelectedScreenshot),
+            #selector(copySelectedContext),
+            #selector(revealSelectedCapture),
+            #selector(deleteSelectedCapture),
+        ]
+        if let action = menuItem.action, selectionActions.contains(action) {
+            return mainWindowController.window?.isKeyWindow == true && model.selectedCapture != nil
+        }
+
+        if menuItem.action == #selector(reloadHistory) {
+            return mainWindowController.window?.isKeyWindow == true
+        }
+        return true
     }
 
     private func observeApplicationActivation() {
@@ -926,6 +1000,35 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func revealLastCapture() {
         guard let lastSnapshot else { return }
         NSWorkspace.shared.activateFileViewerSelecting([lastSnapshot.contextURL])
+    }
+
+    @objc private func copySelectedCombined() {
+        guard let capture = model.selectedCapture else { return }
+        model.copyCombined(capture)
+    }
+
+    @objc private func copySelectedScreenshot() {
+        guard let capture = model.selectedCapture else { return }
+        model.copyScreenshot(capture)
+    }
+
+    @objc private func copySelectedContext() {
+        guard let capture = model.selectedCapture else { return }
+        model.copyContext(capture)
+    }
+
+    @objc private func revealSelectedCapture() {
+        guard let capture = model.selectedCapture else { return }
+        model.reveal(capture)
+    }
+
+    @objc private func reloadHistory() {
+        model.reloadHistory()
+    }
+
+    @objc private func deleteSelectedCapture() {
+        guard let capture = model.selectedCapture else { return }
+        model.requestDeletion(capture)
     }
 
     @objc private func requestMissingPermissions() {

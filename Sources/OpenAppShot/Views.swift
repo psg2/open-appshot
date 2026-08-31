@@ -89,6 +89,25 @@ struct OpenAppShotView: View {
                 .help("Reload capture history")
             }
         }
+        .onDeleteCommand {
+            guard let capture = model.selectedCapture else { return }
+            model.requestDeletion(capture)
+        }
+        .confirmationDialog(
+            "Delete this capture?",
+            isPresented: Binding(
+                get: { model.deletionCandidate != nil },
+                set: { if !$0 { model.cancelDeletion() } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Delete Capture", role: .destructive) { model.confirmDeletion() }
+            Button("Cancel", role: .cancel) { model.cancelDeletion() }
+        } message: {
+            if let capture = model.deletionCandidate {
+                Text("This removes the screenshot and Accessibility context from \(capture.directoryURL.path).")
+            }
+        }
         .onAppear { model.refreshPermissions() }
     }
 }
@@ -123,7 +142,6 @@ private struct CaptureRow: View {
     let capture: CaptureRecord
     let isSelected: Bool
     @State private var isHovering = false
-    @State private var confirmingDelete = false
 
     var body: some View {
         HStack(spacing: 10) {
@@ -168,29 +186,19 @@ private struct CaptureRow: View {
             Spacer(minLength: 2)
             if isHovering || isSelected {
                 Button {
-                    confirmingDelete = true
+                    model.requestDeletion(capture)
                 } label: {
                     Image(systemName: "trash")
                 }
                 .buttonStyle(.borderless)
                 .foregroundStyle(.secondary)
-                .help("Delete capture")
+                .help("Delete capture (⌫)")
                 .accessibilityLabel("Delete \(capture.metadata.appName) capture")
             }
         }
         .padding(.vertical, 3)
         .contentShape(Rectangle())
         .onHover { isHovering = $0 }
-        .confirmationDialog(
-            "Delete this capture?",
-            isPresented: $confirmingDelete,
-            titleVisibility: .visible
-        ) {
-            Button("Delete Capture", role: .destructive) { model.delete(capture) }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This removes the screenshot and Accessibility context from disk.")
-        }
     }
 }
 
@@ -353,7 +361,6 @@ private struct Keycap: View {
 private struct CaptureDetail: View {
     @EnvironmentObject private var model: AppModel
     let capture: CaptureRecord
-    @State private var confirmingDelete = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -391,21 +398,11 @@ private struct CaptureDetail: View {
                     Button("Copy Accessibility Context") { model.copyContext(capture) }
                     Divider()
                     Button("Reveal in Finder") { model.reveal(capture) }
-                    Button("Delete Capture…", role: .destructive) { confirmingDelete = true }
+                    Button("Delete Capture…", role: .destructive) { model.requestDeletion(capture) }
                 } label: {
                     Label("Capture Actions", systemImage: "ellipsis.circle")
                 }
             }
-        }
-        .confirmationDialog(
-            "Delete this capture?",
-            isPresented: $confirmingDelete,
-            titleVisibility: .visible
-        ) {
-            Button("Delete Capture", role: .destructive) { model.delete(capture) }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This removes the screenshot and Accessibility context from \(capture.directoryURL.path).")
         }
     }
 }

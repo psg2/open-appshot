@@ -3,9 +3,10 @@ set -euo pipefail
 
 SCRIPT_DIR="${0:A:h}"
 REPO_ROOT="${SCRIPT_DIR:h}"
-INSTALLED_APP="/Applications/AppShot Clipboard POC.app"
-INSTALLED_BINARY="$INSTALLED_APP/Contents/MacOS/AppShotClipboardPOC"
+INSTALLED_APP="/Applications/Open AppShot.app"
+INSTALLED_BINARY="$INSTALLED_APP/Contents/MacOS/OpenAppShot"
 TRIGGER="$REPO_ROOT/build/trigger-hotkey"
+FIXTURE_BINARY="$REPO_ROOT/build/capture-fixture"
 
 if [[ ! -x "$INSTALLED_BINARY" ]]; then
   echo "Install the app first with: make install" >&2
@@ -22,12 +23,19 @@ xcrun swiftc \
   "$REPO_ROOT/Tests/Support/TriggerHotkey.swift" \
   -o "$TRIGGER"
 
-if ! pgrep -x AppShotClipboardPOC >/dev/null; then
+xcrun swiftc \
+  -O \
+  -warnings-as-errors \
+  -framework AppKit \
+  "$REPO_ROOT/Tests/Fixtures/CaptureFixture.swift" \
+  -o "$FIXTURE_BINARY"
+
+if ! pgrep -x OpenAppShot >/dev/null; then
   open -n "$INSTALLED_APP"
 fi
 
 for _ in {1..50}; do
-  if pgrep -x AppShotClipboardPOC >/dev/null; then
+  if pgrep -x OpenAppShot >/dev/null; then
     permissions=$("$INSTALLED_BINARY" --permissions-status)
     if [[ "$permissions" == *"accessibility=true"* && "$permissions" == *"screen_recording=true"* ]]; then
       break
@@ -35,20 +43,37 @@ for _ in {1..50}; do
   fi
   sleep 0.2
 done
+
+"$FIXTURE_BINARY" &
+fixture_pid=$!
+cleanup() {
+  kill "$fixture_pid" 2>/dev/null || true
+  wait "$fixture_pid" 2>/dev/null || true
+}
+trap cleanup EXIT
 sleep 1
 
 before=$(find "$CAPTURE_ROOT" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
 hotkey_json=$("$INSTALLED_BINARY" --hotkey-json)
 hotkey_kind=$(printf '%s' "$hotkey_json" | jq -r '.kind')
-if [[ "$hotkey_kind" == "keyboard" ]]; then
-  hotkey_code=$(printf '%s' "$hotkey_json" | jq -r '.keyCode')
-  hotkey_modifiers=$(printf '%s' "$hotkey_json" | jq -r '.modifierRawValue')
-  "$TRIGGER" "$hotkey_code" "$hotkey_modifiers"
-else
-  "$TRIGGER"
-fi
+trigger_configured_hotkey() {
+  if [[ "$hotkey_kind" == "keyboard" ]]; then
+    local hotkey_code
+    local hotkey_modifiers
+    hotkey_code=$(printf '%s' "$hotkey_json" | jq -r '.keyCode')
+    hotkey_modifiers=$(printf '%s' "$hotkey_json" | jq -r '.modifierRawValue')
+    "$TRIGGER" "$hotkey_code" "$hotkey_modifiers"
+  else
+    "$TRIGGER"
+  fi
+}
+
+trigger_configured_hotkey
 
 for attempt in {1..100}; do
+  if (( attempt == 25 || attempt == 50 || attempt == 75 )); then
+    trigger_configured_hotkey
+  fi
   after=$(find "$CAPTURE_ROOT" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
   if [[ "$after" -gt "$before" ]]; then
     latest_capture=$(find "$CAPTURE_ROOT" -mindepth 1 -maxdepth 1 -type d -print | sort | tail -1)
