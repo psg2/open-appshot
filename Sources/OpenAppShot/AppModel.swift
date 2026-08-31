@@ -173,6 +173,7 @@ enum CapturePreferences {
     private static let legacyPlaySoundKey = "playCaptureSound"
     private static let captureSoundKey = "captureSoundName"
     private static let captureHotkeyKey = "captureHotkey"
+    private static let confirmBeforeDeletingKey = "confirmBeforeDeleting"
 
     static var defaultCaptureRootURL: URL {
         let applicationSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -244,6 +245,14 @@ enum CapturePreferences {
             guard let data = try? JSONEncoder().encode(newValue) else { return }
             defaults.set(data, forKey: captureHotkeyKey)
         }
+    }
+
+    static var confirmBeforeDeleting: Bool {
+        get {
+            guard defaults.object(forKey: confirmBeforeDeletingKey) != nil else { return true }
+            return defaults.bool(forKey: confirmBeforeDeletingKey)
+        }
+        set { defaults.set(newValue, forKey: confirmBeforeDeletingKey) }
     }
 }
 
@@ -338,6 +347,12 @@ final class AppModel: ObservableObject {
     }
     @Published var captureSound = CapturePreferences.captureSound {
         didSet { CapturePreferences.captureSound = captureSound }
+    }
+    @Published var confirmBeforeDeleting = CapturePreferences.confirmBeforeDeleting {
+        didSet {
+            CapturePreferences.confirmBeforeDeleting = confirmBeforeDeleting
+            if !confirmBeforeDeleting { deletionCandidate = nil }
+        }
     }
     @Published var captureHotkey = CapturePreferences.captureHotkey {
         didSet {
@@ -444,7 +459,11 @@ final class AppModel: ObservableObject {
     }
 
     func requestDeletion(_ record: CaptureRecord) {
-        deletionCandidate = record
+        if confirmBeforeDeleting {
+            deletionCandidate = record
+        } else {
+            delete(record)
+        }
     }
 
     func cancelDeletion() {

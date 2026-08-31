@@ -2,7 +2,7 @@
 
 ## Scope
 
-Open AppShot 0.3.1 observes the last active macOS window after a user gesture. It stores and displays the resulting pixels and Accessibility context. It cannot act on the captured UI.
+Open AppShot 0.3.2 observes the last active macOS window after a user gesture. It stores and displays the resulting pixels and Accessibility context. It cannot act on the captured UI.
 
 ## App structure
 
@@ -53,14 +53,14 @@ The directory uses mode `0700`; files use `0600`. `metadata.json` is the stable 
 
 ## UI state
 
-`AppModel` scans the configured capture root, the default root when a custom destination is active, and the legacy POC root. It keeps the current selection, pending deletion, permission status, capture progress, storage location, retention, sound, hotkey, and clipboard preferences. A completed hotkey capture refreshes history and selects the new record.
+`AppModel` scans the configured capture root, the default root when a custom destination is active, and the legacy POC root. It keeps the current selection, deletion policy, pending deletion, permission status, capture progress, storage location, retention, sound, hotkey, and clipboard preferences. A completed hotkey capture refreshes history and selects the new record.
 
 The native UI has four visible boundaries:
 
-- the history sidebar with local thumbnails and confirmed direct deletion;
+- the history sidebar with local thumbnails and configurable direct deletion;
 - the screenshot and Accessibility previews;
 - the context rail with pixel, AX, and storage facts;
-- Settings for permissions, hotkey recording, sound, capture behavior, retention, and destination.
+- Settings for permissions, hotkey recording, sound, capture behavior, retention, deletion confirmation, and destination.
 
 ## Clipboard boundary
 

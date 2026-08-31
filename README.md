@@ -2,7 +2,7 @@
 
 Open AppShot captures the last active macOS window as pixels and Accessibility context. It keeps a local history and writes both representations to the clipboard for use in any chat or agent UI.
 
-Version 0.3.1 installs as `Open AppShot.app`, adds keyboard commands for capture history, and keeps deletion behind a confirmation. Its global shortcut and confirmation sound are configurable, and Command-W closes the window without quitting the capture service. The app remains capture-only. It cannot click, type, scroll, or invoke UI actions.
+Version 0.3.2 installs as `Open AppShot.app`, adds keyboard commands for capture history, and lets the user choose whether deletion needs confirmation. Its global shortcut and confirmation sound are configurable, and Command-W closes the window without quitting the capture service. The app remains capture-only. It cannot click, type, scroll, or invoke UI actions.
 
 The installed bundle and executable are named Open AppShot. The app keeps the legacy bundle identifier `com.psg2.AppShotClipboardPOC` so macOS can reuse permissions granted to the prototype.
 
@@ -53,7 +53,7 @@ The main window has a capture filmstrip on the left and two previews on the righ
 - **Screenshot** shows the exact window pixels.
 - **Accessibility** shows the readable, redacted AX summary.
 
-The context rail under the preview reports the image dimensions, AX element count, and storage source. The toolbar can capture the last active window, reload history, copy either representation, reveal the capture in Finder, or delete it. Hover or select a capture in the sidebar to reveal its delete button; deletion always requires confirmation.
+The context rail under the preview reports the image dimensions, AX element count, and storage source. The toolbar can capture the last active window, reload history, copy either representation, reveal the capture in Finder, or delete it. Hover or select a capture in the sidebar to reveal its delete button. By default, Enter confirms the deletion dialog and Escape cancels it.
 
 Open AppShot lives in the menu bar instead of the Dock. Command-W closes its current window while leaving the global shortcut active. Use the menu bar icon to reopen the history, capture immediately, or open Settings.
 
@@ -74,6 +74,7 @@ Open Settings with Command-comma to:
 - choose or disable the confirmation sound and preview it;
 - choose a capture folder;
 - keep captures for 1, 7, 30, or 90 days, or forever;
+- choose whether Delete and the trash button ask for confirmation;
 - control automatic clipboard copy.
 
 ## Storage and privacy

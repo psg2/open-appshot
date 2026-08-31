@@ -102,7 +102,9 @@ struct OpenAppShotView: View {
             titleVisibility: .visible
         ) {
             Button("Delete Capture", role: .destructive) { model.confirmDeletion() }
+                .keyboardShortcut(.defaultAction)
             Button("Cancel", role: .cancel) { model.cancelDeletion() }
+                .keyboardShortcut(.cancelAction)
         } message: {
             if let capture = model.deletionCandidate {
                 Text("This removes the screenshot and Accessibility context from \(capture.directoryURL.path).")
@@ -597,19 +599,27 @@ struct OpenAppShotSettingsView: View {
             }
 
             Section {
-                LabeledContent("Folder") {
-                    Text(model.storageURL.path)
-                        .font(.callout.monospaced())
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .textSelection(.enabled)
-                }
                 Picker("Keep captures", selection: $model.retentionDays) {
                     Text("1 day").tag(1)
                     Text("7 days").tag(7)
                     Text("30 days").tag(30)
                     Text("90 days").tag(90)
                     Text("Forever").tag(0)
+                }
+                Toggle("Confirm before deleting captures", isOn: $model.confirmBeforeDeleting)
+            } header: {
+                Text("History")
+            } footer: {
+                Text("Turn off confirmation to make Delete and the trash button remove a capture immediately.")
+            }
+
+            Section {
+                LabeledContent("Folder") {
+                    Text(model.storageURL.path)
+                        .font(.callout.monospaced())
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .textSelection(.enabled)
                 }
                 HStack {
                     Button("Choose Folder…") { model.chooseStorageDirectory() }
