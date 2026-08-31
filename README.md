@@ -2,7 +2,7 @@
 
 Open AppShot captures the last active macOS window as pixels and Accessibility context. It keeps a local history and writes both representations to the clipboard for use in any chat or agent UI.
 
-Version 0.3.2 installs as `Open AppShot.app`, adds keyboard commands for capture history, and lets the user choose whether deletion needs confirmation. Its global shortcut and confirmation sound are configurable, and Command-W closes the window without quitting the capture service. The app remains capture-only. It cannot click, type, scroll, or invoke UI actions.
+Version 0.3.3 installs as `Open AppShot.app` with its own capture-and-accessibility icon, keyboard commands for capture history, and a configurable deletion confirmation. Its global shortcut and confirmation sound are configurable, and Command-W closes the window without quitting the capture service. The app remains capture-only. It cannot click, type, scroll, or invoke UI actions.
 
 The installed bundle and executable are named Open AppShot. The app keeps the legacy bundle identifier `com.psg2.AppShotClipboardPOC` so macOS can reuse permissions granted to the prototype.
 
@@ -115,6 +115,7 @@ Sources/OpenAppShot/AppModel.swift  History, permissions, storage, and UI state
 Sources/OpenAppShot/Views.swift     Native SwiftUI windows and settings
 Sources/OpenAppShot/main.swift      Capture engine, clipboard, menu bar, and hotkey
 Resources/Info.plist                Bundle identity and permission descriptions
+Resources/AppIcon.png               1024-pixel source for the native app icon
 Scripts/                            Build, install, and observable smoke tests
 Tests/Fixtures/                     Deterministic capture target
 Tests/Support/                      Synthetic configurable-hotkey event

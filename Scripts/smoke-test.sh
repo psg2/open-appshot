@@ -5,11 +5,16 @@ SCRIPT_DIR="${0:A:h}"
 REPO_ROOT="${SCRIPT_DIR:h}"
 APP_PATH="$REPO_ROOT/build/Open AppShot.app"
 BINARY="$APP_PATH/Contents/MacOS/OpenAppShot"
+ICON="$APP_PATH/Contents/Resources/AppIcon.icns"
 FIXTURE_BINARY="$REPO_ROOT/build/capture-fixture"
 
-if [[ ! -x "$BINARY" ]]; then
+if [[ ! -x "$BINARY" || ! -s "$ICON" ]]; then
   "$SCRIPT_DIR/build.sh"
 fi
+
+[[ -s "$ICON" ]]
+icon_file=$(plutil -extract CFBundleIconFile raw "$APP_PATH/Contents/Info.plist")
+[[ "$icon_file" == "AppIcon.icns" ]]
 
 xcrun swiftc \
   -O \
@@ -71,4 +76,5 @@ printf '%s\n' "$output"
 printf '%s\n' "$runtime_host"
 printf '%s\n' "$clipboard"
 printf 'history_count=%s\n' "$history_count"
+printf 'icon=%s\n' "$icon_file"
 echo "smoke=GREEN"

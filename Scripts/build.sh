@@ -9,7 +9,9 @@ LEGACY_APP_PATH="$BUILD_ROOT/AppShot Clipboard POC.app"
 
 rm -rf "$APP_PATH"
 rm -rf "$LEGACY_APP_PATH"
-mkdir -p "$APP_PATH/Contents/MacOS"
+mkdir -p "$APP_PATH/Contents/MacOS" "$APP_PATH/Contents/Resources"
+
+"$SCRIPT_DIR/build-icon.sh" >/dev/null
 
 xcrun swiftc \
   -O \
@@ -23,6 +25,7 @@ xcrun swiftc \
   -o "$APP_PATH/Contents/MacOS/OpenAppShot"
 
 cp "$REPO_ROOT/Resources/Info.plist" "$APP_PATH/Contents/Info.plist"
+cp "$BUILD_ROOT/AppIcon.icns" "$APP_PATH/Contents/Resources/AppIcon.icns"
 codesign \
   --force \
   --deep \
