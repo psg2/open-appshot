@@ -44,12 +44,126 @@ struct CaptureRecord: Identifiable, Hashable {
     }
 }
 
+struct CaptureHotkey: Codable, Equatable {
+    enum Kind: String, Codable {
+        case dualOption
+        case keyboard
+    }
+
+    let kind: Kind
+    let keyCode: UInt16?
+    let modifierRawValue: UInt
+    let keyDisplay: String?
+
+    static let dualOption = CaptureHotkey(
+        kind: .dualOption,
+        keyCode: nil,
+        modifierRawValue: NSEvent.ModifierFlags.option.rawValue,
+        keyDisplay: nil
+    )
+
+    static let supportedModifiers: NSEvent.ModifierFlags = [.command, .option, .control, .shift]
+
+    var modifiers: NSEvent.ModifierFlags {
+        NSEvent.ModifierFlags(rawValue: modifierRawValue).intersection(Self.supportedModifiers)
+    }
+
+    var displayName: String {
+        if kind == .dualOption { return "Left ⌥ + Right ⌥" }
+        return modifierSymbols + (keyDisplay ?? "Key")
+    }
+
+    var compactDisplayName: String {
+        if kind == .dualOption { return "L⌥ + R⌥" }
+        return displayName
+    }
+
+    func matchesKeyDown(_ event: NSEvent) -> Bool {
+        guard kind == .keyboard, let keyCode else { return false }
+        let eventModifiers = event.modifierFlags.intersection(Self.supportedModifiers)
+        return event.keyCode == keyCode && eventModifiers == modifiers && !event.isARepeat
+    }
+
+    static func keyboard(event: NSEvent) -> CaptureHotkey? {
+        let modifiers = event.modifierFlags.intersection(supportedModifiers)
+        let requiredModifiers = modifiers.intersection([.command, .option, .control])
+        guard !requiredModifiers.isEmpty else { return nil }
+
+        return CaptureHotkey(
+            kind: .keyboard,
+            keyCode: event.keyCode,
+            modifierRawValue: modifiers.rawValue,
+            keyDisplay: displayKey(for: event)
+        )
+    }
+
+    static func isReserved(_ hotkey: CaptureHotkey) -> Bool {
+        guard hotkey.kind == .keyboard,
+              hotkey.modifiers == [.command],
+              let keyCode = hotkey.keyCode
+        else { return false }
+        return [0, 4, 8, 12, 13, 43, 46].contains(keyCode)
+    }
+
+    private var modifierSymbols: String {
+        var result = ""
+        if modifiers.contains(.control) { result += "⌃" }
+        if modifiers.contains(.option) { result += "⌥" }
+        if modifiers.contains(.shift) { result += "⇧" }
+        if modifiers.contains(.command) { result += "⌘" }
+        return result
+    }
+
+    private static func displayKey(for event: NSEvent) -> String {
+        switch event.keyCode {
+        case 36: return "Return"
+        case 48: return "Tab"
+        case 49: return "Space"
+        case 51: return "Delete"
+        case 53: return "Escape"
+        case 115: return "Home"
+        case 116: return "Page Up"
+        case 117: return "Forward Delete"
+        case 119: return "End"
+        case 121: return "Page Down"
+        case 123: return "←"
+        case 124: return "→"
+        case 125: return "↓"
+        case 126: return "↑"
+        default:
+            let characters = event.charactersIgnoringModifiers?.trimmingCharacters(in: .whitespacesAndNewlines)
+            return characters?.isEmpty == false ? characters!.uppercased() : "Key (event.keyCode)"
+        }
+    }
+}
+
+enum CaptureSound: String, CaseIterable, Identifiable {
+    case none = ""
+    case glass = "Glass"
+    case hero = "Hero"
+    case ping = "Ping"
+    case pop = "Pop"
+    case purr = "Purr"
+    case submarine = "Submarine"
+    case tink = "Tink"
+
+    var id: String { rawValue }
+    var displayName: String { self == .none ? "None" : rawValue }
+
+    func play() {
+        guard self != .none else { return }
+        NSSound(named: rawValue)?.play()
+    }
+}
+
 enum CapturePreferences {
     private static let defaults = UserDefaults.standard
     private static let captureDirectoryKey = "captureDirectoryPath"
     private static let retentionDaysKey = "captureRetentionDays"
     private static let copyAfterCaptureKey = "copyAfterCapture"
-    private static let playSoundKey = "playCaptureSound"
+    private static let legacyPlaySoundKey = "playCaptureSound"
+    private static let captureSoundKey = "captureSoundName"
+    private static let captureHotkeyKey = "captureHotkey"
 
     static var defaultCaptureRootURL: URL {
         let applicationSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -96,12 +210,30 @@ enum CapturePreferences {
         set { defaults.set(newValue, forKey: copyAfterCaptureKey) }
     }
 
-    static var playCaptureSound: Bool {
+    static var captureSound: CaptureSound {
         get {
-            guard defaults.object(forKey: playSoundKey) != nil else { return true }
-            return defaults.bool(forKey: playSoundKey)
+            if let stored = defaults.string(forKey: captureSoundKey), let sound = CaptureSound(rawValue: stored) {
+                return sound
+            }
+            if defaults.object(forKey: legacyPlaySoundKey) != nil, !defaults.bool(forKey: legacyPlaySoundKey) {
+                return .none
+            }
+            return .glass
         }
-        set { defaults.set(newValue, forKey: playSoundKey) }
+        set { defaults.set(newValue.rawValue, forKey: captureSoundKey) }
+    }
+
+    static var captureHotkey: CaptureHotkey {
+        get {
+            guard let data = defaults.data(forKey: captureHotkeyKey),
+                  let hotkey = try? JSONDecoder().decode(CaptureHotkey.self, from: data)
+            else { return .dualOption }
+            return hotkey
+        }
+        set {
+            guard let data = try? JSONEncoder().encode(newValue) else { return }
+            defaults.set(data, forKey: captureHotkeyKey)
+        }
     }
 }
 
@@ -193,12 +325,20 @@ final class AppModel: ObservableObject {
     @Published var copyAfterCapture = CapturePreferences.copyAfterCapture {
         didSet { CapturePreferences.copyAfterCapture = copyAfterCapture }
     }
-    @Published var playCaptureSound = CapturePreferences.playCaptureSound {
-        didSet { CapturePreferences.playCaptureSound = playCaptureSound }
+    @Published var captureSound = CapturePreferences.captureSound {
+        didSet { CapturePreferences.captureSound = captureSound }
+    }
+    @Published var captureHotkey = CapturePreferences.captureHotkey {
+        didSet {
+            CapturePreferences.captureHotkey = captureHotkey
+            hotkeyChangedAction?()
+            if isReady { statusMessage = "Ready for \(captureHotkey.displayName)" }
+        }
     }
 
     var captureAction: (() -> Void)?
     var showSettingsAction: (() -> Void)?
+    var hotkeyChangedAction: (() -> Void)?
 
     init() {
         reloadHistory()
@@ -226,7 +366,7 @@ final class AppModel: ObservableObject {
     func refreshPermissions() {
         accessibilityGranted = AXIsProcessTrusted()
         screenRecordingGranted = CGPreflightScreenCaptureAccess()
-        statusMessage = isReady ? "Ready for Left Option + Right Option" : "Two permissions are needed before capture"
+        statusMessage = isReady ? "Ready for \(captureHotkey.displayName)" : "Two permissions are needed before capture"
     }
 
     func requestMissingPermissions() {
@@ -324,6 +464,14 @@ final class AppModel: ObservableObject {
         reloadHistory()
     }
 
+    func resetCaptureHotkey() {
+        captureHotkey = .dualOption
+    }
+
+    func previewCaptureSound() {
+        captureSound.play()
+    }
+
     func revealStorageDirectory() {
         try? FileManager.default.createDirectory(
             at: storageURL,
@@ -337,7 +485,7 @@ final class AppModel: ObservableObject {
         do {
             try operation()
             statusMessage = label
-            if playCaptureSound { NSSound(named: "Glass")?.play() }
+            captureSound.play()
         } catch {
             statusMessage = "Could not copy capture: \(error.localizedDescription)"
             NSSound.beep()

@@ -2,7 +2,7 @@
 
 ## Scope
 
-Open AppShot 0.2.0 observes the last active macOS window after a user gesture. It stores and displays the resulting pixels and Accessibility context. It cannot act on the captured UI.
+Open AppShot 0.3.0 observes the last active macOS window after a user gesture. It stores and displays the resulting pixels and Accessibility context. It cannot act on the captured UI.
 
 ## App structure
 
@@ -18,12 +18,12 @@ CaptureEngine
   -> multipart NSPasteboard item
 ```
 
-`main.swift` retains the AppKit lifecycle because it owns the status item, main menu, global modifier monitor, command-line smoke-test entry points, and background capture process. `AppModel.swift` owns user-visible state and preferences. `Views.swift` renders the main and Settings windows with SwiftUI.
+`main.swift` retains the AppKit lifecycle because it owns the accessory-app activation policy, status item, main menu, global keyboard monitors, command-line smoke-test entry points, and background capture process. `AppModel.swift` owns user-visible state and preferences. `Views.swift` renders the main and Settings windows with SwiftUI.
 
 ## Capture path
 
 ```text
-Left Option + Right Option or Capture
+Configured global hotkey or Capture
   -> last external NSRunningApplication
   -> Peekaboo local window inventory
   -> exact-window screenshot and Accessibility observation
@@ -53,14 +53,14 @@ The directory uses mode `0700`; files use `0600`. `metadata.json` is the stable 
 
 ## UI state
 
-`AppModel` scans the configured capture root, the default root when a custom destination is active, and the legacy POC root. It keeps the current selection, permission status, capture progress, storage location, retention, sound, and clipboard preferences. A completed hotkey capture refreshes history and selects the new record.
+`AppModel` scans the configured capture root, the default root when a custom destination is active, and the legacy POC root. It keeps the current selection, permission status, capture progress, storage location, retention, sound, hotkey, and clipboard preferences. A completed hotkey capture refreshes history and selects the new record.
 
 The native UI has four visible boundaries:
 
-- the history sidebar with local thumbnails;
+- the history sidebar with local thumbnails and confirmed direct deletion;
 - the screenshot and Accessibility previews;
 - the context rail with pixel, AX, and storage facts;
-- Settings for permissions, capture behavior, retention, and destination.
+- Settings for permissions, hotkey recording, sound, capture behavior, retention, and destination.
 
 ## Clipboard boundary
 
@@ -68,7 +68,9 @@ The same pasteboard item advertises PNG, UTF-8 text, and sanitized JSON. A recei
 
 ## Permissions and signing
 
-Accessibility permission covers the two-Option global monitor and AX inspection. Screen Recording permission covers pixels. The main window and Settings show both states and link to the corresponding System Settings panes.
+Accessibility permission covers the global keyboard monitor and AX inspection. Screen Recording permission covers pixels. The main window and Settings show both states and link to the corresponding System Settings panes.
+
+The app uses the accessory activation policy and `LSUIElement` so it appears in the menu bar without a permanent Dock icon. Closing a window does not release its controller or terminate the process, which keeps the status item and hotkey available.
 
 Local builds are ad hoc signed with an identifier-only designated requirement. The requirement stays stable across rebuilds but does not provide production-grade identity. Public distribution requires Developer ID signing and notarization.
 

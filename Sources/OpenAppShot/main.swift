@@ -599,6 +599,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var settingsWindowController = SettingsWindowController(model: model)
     private var statusItem: NSStatusItem!
     private var statusMenuItem: NSMenuItem!
+    private var hotkeyMenuItem: NSMenuItem!
     private var copyCombinedMenuItem: NSMenuItem!
     private var copyScreenshotMenuItem: NSMenuItem!
     private var copyContextMenuItem: NSMenuItem!
@@ -615,9 +616,13 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         lastExternalApplication = externalApplication(NSWorkspace.shared.frontmostApplication)
-        NSApp.setActivationPolicy(.regular)
+        NSApp.setActivationPolicy(.accessory)
         model.captureAction = { [weak self] in self?.triggerCapture() }
         model.showSettingsAction = { [weak self] in self?.showSettings() }
+        model.hotkeyChangedAction = { [weak self] in
+            self?.installHotkeyMonitor()
+            self?.updatePermissionStatus()
+        }
         buildMainMenu()
         buildMenuBar()
         observeApplicationActivation()
@@ -657,8 +662,9 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(targetedMenuItem(title: "Open AppShot", action: #selector(showMainWindow)))
 
         menu.addItem(targetedMenuItem(title: "Capture now", action: #selector(captureNow)))
-        menu.addItem(NSMenuItem(title: "Hotkey: Left Option + Right Option", action: nil, keyEquivalent: ""))
-        menu.items.last?.isEnabled = false
+        hotkeyMenuItem = NSMenuItem(title: "Hotkey: \(model.captureHotkey.displayName)", action: nil, keyEquivalent: "")
+        hotkeyMenuItem.isEnabled = false
+        menu.addItem(hotkeyMenuItem)
         menu.addItem(.separator())
 
         copyCombinedMenuItem = targetedMenuItem(title: "Copy combined clipboard", action: #selector(copyCombined))
@@ -727,6 +733,8 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let windowItem = NSMenuItem()
         let windowMenu = NSMenu(title: "Window")
+        windowMenu.addItem(targetedMenuItem(title: "Close Window", action: #selector(closeKeyWindow), keyEquivalent: "w"))
+        windowMenu.addItem(.separator())
         windowMenu.addItem(
             withTitle: "Minimize",
             action: #selector(NSWindow.performMiniaturize(_:)),
@@ -767,16 +775,31 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func installHotkeyMonitor() {
-        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
-            self?.handleModifierEvent(event)
+        if let globalMonitor { NSEvent.removeMonitor(globalMonitor) }
+        if let localMonitor { NSEvent.removeMonitor(localMonitor) }
+        leftOptionDown = false
+        rightOptionDown = false
+        hotkeyLatched = false
+
+        let eventMask: NSEvent.EventTypeMask = [.flagsChanged, .keyDown]
+        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: eventMask) { [weak self] event in
+            self?.handleHotkeyEvent(event)
         }
-        localMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
-            self?.handleModifierEvent(event)
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: eventMask) { [weak self] event in
+            self?.handleHotkeyEvent(event)
             return event
         }
     }
 
-    private func handleModifierEvent(_ event: NSEvent) {
+    private func handleHotkeyEvent(_ event: NSEvent) {
+        if model.captureHotkey.kind == .keyboard {
+            if event.type == .keyDown, model.captureHotkey.matchesKeyDown(event) {
+                triggerCapture()
+            }
+            return
+        }
+
+        guard event.type == .flagsChanged else { return }
         let flags = event.modifierFlags
         let raw = flags.rawValue
         let deviceFlags = raw & 0x00000060
@@ -849,7 +872,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
                             ? "Copied \(snapshot.appName), \(snapshot.elementCount) AX elements"
                             : "Captured \(snapshot.appName), \(snapshot.elementCount) AX elements"
                         self.setStatusIcon(symbol: "checkmark.circle.fill")
-                        if CapturePreferences.playCaptureSound { NSSound(named: "Glass")?.play() }
+                        CapturePreferences.captureSound.play()
                         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                             self.setStatusIcon(symbol: "camera.viewfinder")
                         }
@@ -932,6 +955,10 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
         model.refreshPermissions()
     }
 
+    @objc private func closeKeyWindow() {
+        (NSApp.keyWindow ?? NSApp.mainWindow)?.performClose(nil)
+    }
+
     @objc private func quit() {
         NSApp.terminate(nil)
     }
@@ -941,18 +968,19 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
         let accessibility = AXIsProcessTrusted()
         let screenRecording = CGPreflightScreenCaptureAccess()
         if accessibility && screenRecording {
-            statusMenuItem.title = "Ready. Press Left Option + Right Option"
+            statusMenuItem.title = "Ready. Press \(model.captureHotkey.displayName)"
         } else if !accessibility {
             statusMenuItem.title = "Accessibility permission is required"
         } else {
             statusMenuItem.title = "Screen Recording permission is required"
         }
+        hotkeyMenuItem.title = "Hotkey: \(model.captureHotkey.displayName)"
     }
 
     private func showCopySuccess(_ message: String) {
         statusMenuItem.title = message
         setStatusIcon(symbol: "checkmark.circle.fill")
-        NSSound(named: "Glass")?.play()
+        CapturePreferences.captureSound.play()
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
             self?.setStatusIcon(symbol: "camera.viewfinder")
         }
@@ -972,7 +1000,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func setStatusIcon(symbol: String) {
-        statusItem.button?.image = NSImage(systemSymbolName: symbol, accessibilityDescription: "AppShot Clipboard")
+        statusItem.button?.image = NSImage(systemSymbolName: symbol, accessibilityDescription: "Open AppShot")
     }
 
     private func externalApplication(_ application: NSRunningApplication?) -> NSRunningApplication? {
@@ -1017,6 +1045,17 @@ if arguments.contains("--capture-root") {
 if arguments.contains("--history-count") {
     print(CaptureHistory.load().count)
     exit(EXIT_SUCCESS)
+}
+
+if arguments.contains("--hotkey-json") {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys]
+    if let data = try? encoder.encode(CapturePreferences.captureHotkey),
+       let value = String(data: data, encoding: .utf8) {
+        print(value)
+        exit(EXIT_SUCCESS)
+    }
+    exit(EXIT_FAILURE)
 }
 
 if arguments.contains("--capture-once") {

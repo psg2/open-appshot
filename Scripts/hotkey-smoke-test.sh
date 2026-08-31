@@ -38,7 +38,15 @@ done
 sleep 1
 
 before=$(find "$CAPTURE_ROOT" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
-"$TRIGGER"
+hotkey_json=$("$INSTALLED_BINARY" --hotkey-json)
+hotkey_kind=$(printf '%s' "$hotkey_json" | jq -r '.kind')
+if [[ "$hotkey_kind" == "keyboard" ]]; then
+  hotkey_code=$(printf '%s' "$hotkey_json" | jq -r '.keyCode')
+  hotkey_modifiers=$(printf '%s' "$hotkey_json" | jq -r '.modifierRawValue')
+  "$TRIGGER" "$hotkey_code" "$hotkey_modifiers"
+else
+  "$TRIGGER"
+fi
 
 for attempt in {1..100}; do
   after=$(find "$CAPTURE_ROOT" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
@@ -53,7 +61,7 @@ for attempt in {1..100}; do
       printf 'capture_directory=%s\n' "$latest_capture"
       printf '%s\n' "$runtime_host"
       printf '%s\n' "$clipboard"
-      echo "hotkey_smoke=GREEN attempts=$attempt"
+      echo "hotkey_smoke=GREEN attempts=$attempt kind=$hotkey_kind"
       exit 0
     fi
     if [[ -f "$latest_capture/windows.json" ]] && jq -e '.success == false' "$latest_capture/windows.json" >/dev/null 2>&1; then

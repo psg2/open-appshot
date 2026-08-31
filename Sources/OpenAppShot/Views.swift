@@ -13,6 +13,7 @@ final class MainWindowController: NSWindowController {
         window.titlebarAppearsTransparent = true
         window.toolbarStyle = .unified
         window.tabbingMode = .disallowed
+        window.isReleasedWhenClosed = false
         window.setFrameAutosaveName("OpenAppShotMainWindow")
         super.init(window: window)
         shouldCascadeWindows = true
@@ -33,6 +34,7 @@ final class SettingsWindowController: NSWindowController {
         window.setContentSize(NSSize(width: 620, height: 600))
         window.styleMask = [.titled, .closable]
         window.tabbingMode = .disallowed
+        window.isReleasedWhenClosed = false
         window.center()
         super.init(window: window)
     }
@@ -98,7 +100,7 @@ private struct CaptureSidebar: View {
         List(selection: $model.selectedCaptureID) {
             Section("Captures") {
                 ForEach(model.captures) { capture in
-                    CaptureRow(capture: capture)
+                    CaptureRow(capture: capture, isSelected: model.selectedCaptureID == capture.id)
                         .tag(capture.id)
                         .contextMenu {
                             Button("Copy Screenshot and Context") { model.copyCombined(capture) }
@@ -117,7 +119,11 @@ private struct CaptureSidebar: View {
 }
 
 private struct CaptureRow: View {
+    @EnvironmentObject private var model: AppModel
     let capture: CaptureRecord
+    let isSelected: Bool
+    @State private var isHovering = false
+    @State private var confirmingDelete = false
 
     var body: some View {
         HStack(spacing: 10) {
@@ -158,8 +164,33 @@ private struct CaptureRow: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             }
+
+            Spacer(minLength: 2)
+            if isHovering || isSelected {
+                Button {
+                    confirmingDelete = true
+                } label: {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.secondary)
+                .help("Delete capture")
+                .accessibilityLabel("Delete \(capture.metadata.appName) capture")
+            }
         }
         .padding(.vertical, 3)
+        .contentShape(Rectangle())
+        .onHover { isHovering = $0 }
+        .confirmationDialog(
+            "Delete this capture?",
+            isPresented: $confirmingDelete,
+            titleVisibility: .visible
+        ) {
+            Button("Delete Capture", role: .destructive) { model.delete(capture) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This removes the screenshot and Accessibility context from disk.")
+        }
     }
 }
 
@@ -241,20 +272,14 @@ private struct FirstCaptureView: View {
 
     var body: some View {
         VStack(spacing: 24) {
-            HStack(spacing: 10) {
-                Keycap(label: "⌥", side: "L")
-                Image(systemName: "plus")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-                Keycap(label: "⌥", side: "R")
-            }
+            HotkeyIllustration(hotkey: model.captureHotkey)
 
             VStack(spacing: 8) {
                 Text(model.isReady ? "Capture your first window" : "Set up Open AppShot")
                     .font(.title2.weight(.semibold))
                 Text(
                     model.isReady
-                        ? "Focus another app, then press both Option keys. The screenshot and Accessibility context will appear here."
+                        ? "Focus another app, then press \(model.captureHotkey.displayName). The screenshot and Accessibility context will appear here."
                         : "Grant the two macOS permissions above. Open AppShot only observes a window after you trigger a capture."
                 )
                 .foregroundStyle(.secondary)
@@ -270,6 +295,36 @@ private struct FirstCaptureView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(40)
+    }
+}
+
+private struct HotkeyIllustration: View {
+    let hotkey: CaptureHotkey
+
+    var body: some View {
+        if hotkey.kind == .dualOption {
+            HStack(spacing: 10) {
+                Keycap(label: "⌥", side: "L")
+                Image(systemName: "plus")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                Keycap(label: "⌥", side: "R")
+            }
+        } else {
+            Text(hotkey.displayName)
+                .font(.system(size: 24, weight: .semibold, design: .rounded))
+                .padding(.horizontal, 22)
+                .frame(height: 52)
+                .background {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color(nsColor: .controlBackgroundColor))
+                        .shadow(color: .black.opacity(0.13), radius: 0, y: 3)
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(Color(nsColor: .separatorColor), lineWidth: 0.5)
+                }
+        }
     }
 }
 
@@ -482,6 +537,7 @@ private struct ContextMetric: View {
 
 struct OpenAppShotSettingsView: View {
     @EnvironmentObject private var model: AppModel
+    @State private var recordingHotkey = false
 
     var body: some View {
         Form {
@@ -511,14 +567,34 @@ struct OpenAppShotSettingsView: View {
             Section {
                 LabeledContent("Hotkey") {
                     HStack(spacing: 6) {
-                        Text("Left ⌥")
-                        Text("+").foregroundStyle(.secondary)
-                        Text("Right ⌥")
+                        HotkeyBadge(hotkey: model.captureHotkey)
+                        Button("Record…") { recordingHotkey = true }
+                            .controlSize(.small)
+                        Button("Reset") { model.resetCaptureHotkey() }
+                            .controlSize(.small)
+                            .disabled(model.captureHotkey == .dualOption)
                     }
-                    .font(.system(.body, design: .rounded).weight(.medium))
                 }
                 Toggle("Copy screenshot and context after capture", isOn: $model.copyAfterCapture)
-                Toggle("Play a sound after capture", isOn: $model.playCaptureSound)
+                LabeledContent("Sound") {
+                    HStack(spacing: 6) {
+                        Picker("Sound", selection: $model.captureSound) {
+                            ForEach(CaptureSound.allCases) { sound in
+                                Text(sound.displayName).tag(sound)
+                            }
+                        }
+                        .labelsHidden()
+                        .frame(width: 150)
+                        Button {
+                            model.previewCaptureSound()
+                        } label: {
+                            Image(systemName: "speaker.wave.2")
+                        }
+                        .controlSize(.small)
+                        .disabled(model.captureSound == .none)
+                        .help("Preview sound")
+                    }
+                }
             } header: {
                 Text("Capture")
             }
@@ -561,6 +637,163 @@ struct OpenAppShotSettingsView: View {
         .formStyle(.grouped)
         .frame(width: 620, height: 600)
         .onAppear { model.refreshPermissions() }
+        .sheet(isPresented: $recordingHotkey) {
+            ShortcutRecorderSheet()
+                .environmentObject(model)
+        }
+    }
+}
+
+private struct HotkeyBadge: View {
+    let hotkey: CaptureHotkey
+
+    var body: some View {
+        Text(hotkey.compactDisplayName)
+            .font(.system(.callout, design: .rounded).weight(.semibold))
+            .padding(.horizontal, 9)
+            .padding(.vertical, 4)
+            .background(Color(nsColor: .quaternarySystemFill), in: RoundedRectangle(cornerRadius: 6))
+            .overlay {
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(Color(nsColor: .separatorColor), lineWidth: 0.5)
+            }
+    }
+}
+
+private struct ShortcutRecorderSheet: View {
+    @EnvironmentObject private var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var candidate: CaptureHotkey?
+    @State private var message = "Press a shortcut with Command, Option, or Control."
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "keyboard.badge.ellipsis")
+                .font(.system(size: 34))
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(.blue)
+
+            VStack(spacing: 6) {
+                Text("Record capture shortcut")
+                    .font(.title2.weight(.semibold))
+                Text("Press both Option keys, or a key combination that includes Command, Option, or Control.")
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 430)
+            }
+
+            ShortcutRecorderView(candidate: $candidate, message: $message)
+                .frame(width: 420, height: 78)
+
+            Text(candidate?.displayName ?? message)
+                .font(.system(.body, design: .rounded).weight(candidate == nil ? .regular : .semibold))
+                .foregroundStyle(candidate == nil ? .secondary : .primary)
+
+            HStack {
+                Button("Cancel") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button("Use Shortcut") {
+                    guard let candidate else { return }
+                    model.captureHotkey = candidate
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(candidate == nil)
+            }
+        }
+        .padding(28)
+        .frame(width: 500)
+    }
+}
+
+private struct ShortcutRecorderView: NSViewRepresentable {
+    @Binding var candidate: CaptureHotkey?
+    @Binding var message: String
+
+    func makeNSView(context: Context) -> ShortcutRecorderNSView {
+        let view = ShortcutRecorderNSView()
+        view.onResult = { hotkey, error in
+            DispatchQueue.main.async {
+                candidate = hotkey
+                if let error { message = error }
+            }
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: ShortcutRecorderNSView, context: Context) {}
+}
+
+private final class ShortcutRecorderNSView: NSView {
+    var onResult: ((CaptureHotkey?, String?) -> Void)?
+    private let label = NSTextField(labelWithString: "Listening for shortcut…")
+
+    override var acceptsFirstResponder: Bool { true }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.cornerRadius = 10
+        layer?.borderWidth = 1
+
+        label.font = .systemFont(ofSize: 15, weight: .medium)
+        label.textColor = .secondaryLabelColor
+        label.alignment = .center
+        label.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(label)
+        NSLayoutConstraint.activate([
+            label.centerXAnchor.constraint(equalTo: centerXAnchor),
+            label.centerYAnchor.constraint(equalTo: centerYAnchor),
+            label.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 16),
+            label.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -16),
+        ])
+        updateColors()
+        setAccessibilityLabel("Shortcut recorder")
+        setAccessibilityHelp("Press a shortcut to use for capture")
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.window?.makeFirstResponder(self)
+        }
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        updateColors()
+    }
+
+    override func keyDown(with event: NSEvent) {
+        guard let hotkey = CaptureHotkey.keyboard(event: event) else {
+            onResult?(nil, "Include Command, Option, or Control in the shortcut.")
+            NSSound.beep()
+            return
+        }
+        guard !CaptureHotkey.isReserved(hotkey) else {
+            onResult?(nil, "That shortcut is reserved by macOS or Open AppShot.")
+            NSSound.beep()
+            return
+        }
+        onResult?(hotkey, nil)
+    }
+
+    override func flagsChanged(with event: NSEvent) {
+        let deviceOptionFlags = event.modifierFlags.rawValue & 0x00000060
+        if deviceOptionFlags == 0x00000060 {
+            onResult?(.dualOption, nil)
+        }
+    }
+
+    private func updateColors() {
+        layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
+        layer?.borderColor = NSColor.separatorColor.cgColor
     }
 }
 

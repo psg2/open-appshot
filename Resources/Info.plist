@@ -17,13 +17,13 @@
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>0.2.0</string>
+    <string>0.3.0</string>
     <key>CFBundleVersion</key>
-    <string>3</string>
+    <string>4</string>
     <key>LSMinimumSystemVersion</key>
     <string>15.0</string>
     <key>LSUIElement</key>
-    <false/>
+    <true/>
     <key>NSAccessibilityUsageDescription</key>
     <string>Open AppShot observes the global capture hotkey and reads Accessibility context from the window you choose to capture.</string>
     <key>NSScreenCaptureUsageDescription</key>

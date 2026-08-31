@@ -2,7 +2,7 @@
 
 Open AppShot captures the last active macOS window as pixels and Accessibility context. It keeps a local history and writes both representations to the clipboard for use in any chat or agent UI.
 
-Version 0.2.0 adds a native SwiftUI window, permission setup, capture history, a screenshot and Accessibility inspector, and configurable local storage. The app remains capture-only. It cannot click, type, scroll, or invoke UI actions.
+Version 0.3.0 makes Open AppShot a menu bar utility. Its global shortcut and confirmation sound are configurable, the history supports direct deletion with confirmation, and Command-W closes the window without quitting the capture service. The app remains capture-only. It cannot click, type, scroll, or invoke UI actions.
 
 The installed bundle is still named `AppShot Clipboard POC.app` and keeps `com.psg2.AppShotClipboardPOC`. The display name is Open AppShot. Preserving the bundle ID avoids invalidating the macOS permissions granted during the prototype.
 
@@ -42,9 +42,9 @@ make hotkey-smoke
 3. Enable Open AppShot under System Settings > Privacy & Security > Accessibility and Screen & System Audio Recording.
 4. Quit and reopen the app if macOS requests it.
 5. Focus the window you want to share.
-6. Press **Left Option + Right Option** together.
+6. Press **Left Option + Right Option** together, or use the shortcut configured in Settings.
 
-The capture appears at the top of the history and is copied to the clipboard by default. The Codex desktop app already owns Left Command + Right Command, so Open AppShot uses the two Option keys to avoid triggering both apps.
+The capture appears at the top of the history and is copied to the clipboard by default. The Codex desktop app already owns Left Command + Right Command, so Open AppShot defaults to the two Option keys to avoid triggering both apps.
 
 ## Native app
 
@@ -53,14 +53,18 @@ The main window has a capture filmstrip on the left and two previews on the righ
 - **Screenshot** shows the exact window pixels.
 - **Accessibility** shows the readable, redacted AX summary.
 
-The context rail under the preview reports the image dimensions, AX element count, and storage source. The toolbar can capture the last active window, reload history, copy either representation, reveal the capture in Finder, or delete it.
+The context rail under the preview reports the image dimensions, AX element count, and storage source. The toolbar can capture the last active window, reload history, copy either representation, reveal the capture in Finder, or delete it. Hover or select a capture in the sidebar to reveal its delete button; deletion always requires confirmation.
+
+Open AppShot lives in the menu bar instead of the Dock. Command-W closes its current window while leaving the global shortcut active. Use the menu bar icon to reopen the history, capture immediately, or open Settings.
 
 Open Settings with Command-comma to:
 
 - inspect both macOS permissions;
+- record a custom global shortcut or restore the two-Option default;
+- choose or disable the confirmation sound and preview it;
 - choose a capture folder;
 - keep captures for 1, 7, 30, or 90 days, or forever;
-- control automatic clipboard copy and the confirmation sound.
+- control automatic clipboard copy.
 
 ## Storage and privacy
 
@@ -102,7 +106,7 @@ Sources/OpenAppShot/main.swift      Capture engine, clipboard, menu bar, and hot
 Resources/Info.plist                Bundle identity and permission descriptions
 Scripts/                            Build, install, and observable smoke tests
 Tests/Fixtures/                     Deterministic capture target
-Tests/Support/                      Synthetic two-Option event
+Tests/Support/                      Synthetic configurable-hotkey event
 docs/                               Architecture and prototype findings
 ```
 
