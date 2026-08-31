@@ -2,7 +2,7 @@
 
 Open AppShot captures the last active macOS window as pixels and Accessibility context. It keeps a local history and writes both representations to the clipboard for use in any chat or agent UI.
 
-Version 0.3.3 installs as `Open AppShot.app` with its own capture-and-accessibility icon, keyboard commands for capture history, and a configurable deletion confirmation. Its global shortcut and confirmation sound are configurable, and Command-W closes the window without quitting the capture service. The app remains capture-only. It cannot click, type, scroll, or invoke UI actions.
+Version 0.4.0 installs as `Open AppShot.app` with configurable clipboard modes, its own capture-and-accessibility icon, keyboard commands for capture history, and a configurable deletion confirmation. Its global shortcut and confirmation sound are configurable, and Command-W closes the window without quitting the capture service. The app remains capture-only. It cannot click, type, scroll, or invoke UI actions.
 
 The installed bundle and executable are named Open AppShot. The app keeps the legacy bundle identifier `com.psg2.AppShotClipboardPOC` so macOS can reuse permissions granted to the prototype.
 
@@ -27,7 +27,7 @@ make smoke
 make install
 ```
 
-`make smoke` launches a deterministic local fixture and captures it through the built command-line entry point. It checks the PNG, Accessibility JSON, history metadata, private file permissions, local Peekaboo runtime, and multipart clipboard contract.
+`make smoke` launches a deterministic local fixture and captures it through the built command-line entry point. It checks the PNG, Accessibility JSON, history metadata, private file permissions, local Peekaboo runtime, and every clipboard mode.
 
 After installation, exercise the real global-hotkey path:
 
@@ -60,7 +60,7 @@ Open AppShot lives in the menu bar instead of the Dock. Command-W closes its cur
 The Capture menu exposes the window commands and their shortcuts:
 
 - Shift-Command-C captures the last active window;
-- Option-Command-C copies the selected screenshot and context;
+- Option-Command-C copies the selected capture using the configured clipboard mode;
 - Option-Command-I copies the selected screenshot;
 - Option-Command-T copies the selected Accessibility context;
 - Shift-Command-R reveals the selected capture in Finder;
@@ -75,7 +75,7 @@ Open Settings with Command-comma to:
 - choose a capture folder;
 - keep captures for 1, 7, 30, or 90 days, or forever;
 - choose whether Delete and the trash button ask for confirmation;
-- control automatic clipboard copy.
+- control automatic clipboard copy and choose its content.
 
 ## Storage and privacy
 
@@ -98,15 +98,16 @@ Each capture contains:
 
 Directories use mode `0700` and files use `0600`. Secure Accessibility values are redacted. Open AppShot does not use OCR, AI providers, telemetry, or network upload. A screenshot can still contain anything visibly present in the selected window.
 
-## Clipboard contract
+## Clipboard modes
 
-One pasteboard item carries:
+The selected clipboard mode controls automatic copies and the main Copy command:
 
-- `public.png`, the exact window screenshot;
-- `public.utf8-plain-text`, a readable Accessibility summary;
-- `com.psg2.appshot-context-json`, sanitized structured data for future adapters.
+- **Image + Full Accessibility** writes `public.png`, readable text for every captured element, and redacted structured JSON under `com.psg2.appshot-context-json`.
+- **Image + File References** writes `public.png` and compact text with absolute local paths to `screenshot.png`, `accessibility.json`, and `context.md`. It does not place the full Accessibility content on the clipboard.
+- **Image Only** writes `public.png` without text or Accessibility JSON.
+- **Accessibility Only** writes the readable text and structured JSON without image pixels.
 
-The receiving chat chooses which representation it imports. Some composers accept the image and ignore the text. Use the capture actions to copy the screenshot and Accessibility context separately when needed.
+One pasteboard item advertises all representations for the selected mode. A receiving chat may still choose only one representation. The explicit image-only and Accessibility-only capture actions remain available without changing Settings.
 
 ## Repository layout
 
@@ -116,6 +117,7 @@ Sources/OpenAppShot/Views.swift     Native SwiftUI windows and settings
 Sources/OpenAppShot/main.swift      Capture engine, clipboard, menu bar, and hotkey
 Resources/Info.plist                Bundle identity and permission descriptions
 Resources/AppIcon.png               1024-pixel source for the native app icon
+CONTEXT.md                           Canonical capture and clipboard vocabulary
 Scripts/                            Build, install, and observable smoke tests
 Tests/Fixtures/                     Deterministic capture target
 Tests/Support/                      Synthetic configurable-hotkey event

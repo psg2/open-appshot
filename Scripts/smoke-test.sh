@@ -31,8 +31,22 @@ cleanup() {
 }
 trap cleanup EXIT
 
+assert_clipboard_shape() {
+  local output="$1"
+  local expects_png="$2"
+  local expects_text="$3"
+  local expects_context="$4"
+  local png_bytes=$(printf '%s\n' "$output" | sed -n 's/^png_bytes=//p' | tail -1)
+  local text_characters=$(printf '%s\n' "$output" | sed -n 's/^text_characters=//p' | tail -1)
+  local context_bytes=$(printf '%s\n' "$output" | sed -n 's/^context_json_bytes=//p' | tail -1)
+
+  if [[ "$expects_png" == "yes" ]]; then [[ "$png_bytes" -gt 0 ]]; else [[ "$png_bytes" -eq 0 ]]; fi
+  if [[ "$expects_text" == "yes" ]]; then [[ "$text_characters" -gt 0 ]]; else [[ "$text_characters" -eq 0 ]]; fi
+  if [[ "$expects_context" == "yes" ]]; then [[ "$context_bytes" -gt 0 ]]; else [[ "$context_bytes" -eq 0 ]]; fi
+}
+
 sleep 1
-output=$("$BINARY" --capture-once --pid "$fixture_pid")
+output=$("$BINARY" --capture-once --pid "$fixture_pid" --clipboard-mode full)
 capture_directory=$(printf '%s\n' "$output" | sed -n 's/^capture_directory=//p')
 
 [[ "$output" == *"window=Open AppShot Capture Fixture"* ]]
@@ -67,14 +81,29 @@ metadata_mode=$(stat -f '%Sp' "$capture_directory/metadata.json")
 history_count=$("$BINARY" --history-count)
 [[ "$history_count" -gt 0 ]]
 
-clipboard=$("$BINARY" --inspect-clipboard)
-[[ "$clipboard" == *"public.png"* ]]
-[[ "$clipboard" == *"public.utf8-plain-text"* ]]
-[[ "$clipboard" == *"com.psg2.appshot-context-json"* ]]
+full_clipboard=$("$BINARY" --copy-capture "$capture_directory" --clipboard-mode full)
+assert_clipboard_shape "$full_clipboard" yes yes yes
+
+references_clipboard=$("$BINARY" --copy-capture "$capture_directory" --clipboard-mode references)
+assert_clipboard_shape "$references_clipboard" yes yes no
+reference_text=$("$BINARY" --clipboard-text)
+[[ "$reference_text" == *"Accessibility JSON: $capture_directory/accessibility.json"* ]]
+[[ "$reference_text" == *"Readable context: $capture_directory/context.md"* ]]
+[[ "$reference_text" != *"## Accessibility summary"* ]]
+
+image_clipboard=$("$BINARY" --copy-capture "$capture_directory" --clipboard-mode image)
+assert_clipboard_shape "$image_clipboard" yes no no
+
+accessibility_clipboard=$("$BINARY" --copy-capture "$capture_directory" --clipboard-mode accessibility)
+assert_clipboard_shape "$accessibility_clipboard" no yes yes
+
+clipboard=$("$BINARY" --copy-capture "$capture_directory" --clipboard-mode full)
+assert_clipboard_shape "$clipboard" yes yes yes
 
 printf '%s\n' "$output"
 printf '%s\n' "$runtime_host"
 printf '%s\n' "$clipboard"
+printf 'clipboard_modes=full,references,image,accessibility\n'
 printf 'history_count=%s\n' "$history_count"
 printf 'icon=%s\n' "$icon_file"
 echo "smoke=GREEN"

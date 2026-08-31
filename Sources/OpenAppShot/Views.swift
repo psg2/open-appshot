@@ -31,7 +31,7 @@ final class SettingsWindowController: NSWindowController {
         let hostingController = NSHostingController(rootView: rootView)
         let window = NSWindow(contentViewController: hostingController)
         window.title = "Open AppShot Settings"
-        window.setContentSize(NSSize(width: 620, height: 600))
+        window.setContentSize(NSSize(width: 620, height: 680))
         window.styleMask = [.titled, .closable]
         window.tabbingMode = .disallowed
         window.isReleasedWhenClosed = false
@@ -124,7 +124,9 @@ private struct CaptureSidebar: View {
                     CaptureRow(capture: capture, isSelected: model.selectedCaptureID == capture.id)
                         .tag(capture.id)
                         .contextMenu {
-                            Button("Copy Screenshot and Context") { model.copyCombined(capture) }
+                            Button("Copy Using \(model.clipboardMode.displayName)") {
+                                model.copyUsingClipboardMode(capture)
+                            }
                             Button("Reveal in Finder") { model.reveal(capture) }
                         }
                 }
@@ -395,7 +397,11 @@ private struct CaptureDetail: View {
 
             ToolbarItemGroup(placement: .secondaryAction) {
                 Menu {
-                    Button("Copy Screenshot and Context") { model.copyCombined(capture) }
+                    Button("Copy Using \(model.clipboardMode.displayName)") {
+                        model.copyUsingClipboardMode(capture)
+                    }
+                    Divider()
+                    Button("Copy Image + Full Accessibility") { model.copyFullContext(capture) }
                     Button("Copy Screenshot") { model.copyScreenshot(capture) }
                     Button("Copy Accessibility Context") { model.copyContext(capture) }
                     Divider()
@@ -574,7 +580,19 @@ struct OpenAppShotSettingsView: View {
                             .disabled(model.captureHotkey == .dualOption)
                     }
                 }
-                Toggle("Copy screenshot and context after capture", isOn: $model.copyAfterCapture)
+                Toggle("Copy after capture", isOn: $model.copyAfterCapture)
+                VStack(alignment: .leading, spacing: 8) {
+                    Picker("Clipboard content", selection: $model.clipboardMode) {
+                        ForEach(ClipboardMode.allCases) { mode in
+                            Text(mode.displayName).tag(mode)
+                        }
+                    }
+                    Text(model.clipboardMode.detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    ClipboardModeReceipt(mode: model.clipboardMode)
+                }
                 LabeledContent("Sound") {
                     HStack(spacing: 6) {
                         Picker("Sound", selection: $model.captureSound) {
@@ -596,6 +614,8 @@ struct OpenAppShotSettingsView: View {
                 }
             } header: {
                 Text("Capture")
+            } footer: {
+                Text("The clipboard mode applies to automatic copies and the main Copy command. Explicit image-only and Accessibility-only commands remain available.")
             }
 
             Section {
@@ -642,13 +662,65 @@ struct OpenAppShotSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 620, height: 600)
+        .frame(width: 620, height: 680)
         .onAppear { model.refreshPermissions() }
         .sheet(isPresented: $recordingHotkey) {
             ShortcutRecorderSheet()
                 .environmentObject(model)
         }
     }
+}
+
+private struct ClipboardModeReceipt: View {
+    let mode: ClipboardMode
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(items) { item in
+                HStack(spacing: 4) {
+                    Image(systemName: item.systemImage)
+                        .foregroundStyle(.blue)
+                    Text(item.label)
+                }
+                .font(.caption2.weight(.medium))
+                .padding(.horizontal, 7)
+                .padding(.vertical, 4)
+                .background(Color(nsColor: .controlBackgroundColor), in: Capsule())
+                .overlay {
+                    Capsule().stroke(Color(nsColor: .separatorColor), lineWidth: 0.5)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(8)
+        .background(Color(nsColor: .quaternarySystemFill), in: RoundedRectangle(cornerRadius: 8))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Clipboard contains \(items.map(\.label).joined(separator: ", "))")
+    }
+
+    private var items: [ClipboardReceiptItem] {
+        var result: [ClipboardReceiptItem] = []
+        if mode.includesImage {
+            result.append(ClipboardReceiptItem(label: "Image", systemImage: "photo"))
+        }
+        if mode.includesFullContext {
+            result.append(ClipboardReceiptItem(label: "AX text", systemImage: "text.alignleft"))
+        }
+        if mode.includesStructuredContext {
+            result.append(ClipboardReceiptItem(label: "AX JSON", systemImage: "point.3.connected.trianglepath.dotted"))
+        }
+        if mode.includesFileReferences {
+            result.append(ClipboardReceiptItem(label: "File paths", systemImage: "link"))
+        }
+        return result
+    }
+}
+
+private struct ClipboardReceiptItem: Identifiable {
+    let label: String
+    let systemImage: String
+
+    var id: String { label }
 }
 
 private struct HotkeyBadge: View {

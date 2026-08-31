@@ -14,6 +14,7 @@ private enum AppShotError: LocalizedError {
     case invalidResponse(String)
     case noWindow(String)
     case missingScreenshot
+    case invalidArguments(String)
 
     var errorDescription: String? {
         switch self {
@@ -29,6 +30,8 @@ private enum AppShotError: LocalizedError {
             return "No capturable window was found for \(appName)."
         case .missingScreenshot:
             return "Peekaboo completed without producing a screenshot."
+        case let .invalidArguments(message):
+            return message
         }
     }
 }
@@ -320,7 +323,6 @@ final class CaptureEngine {
         captureStrategy: String
     ) -> String {
         let elements = observation["ui_elements"] as? [[String: Any]] ?? []
-        let maximumElements = 250
         var lines = [
             "# AppShot context",
             "",
@@ -341,11 +343,8 @@ final class CaptureEngine {
             "",
         ]
 
-        for element in elements.prefix(maximumElements) {
+        for element in elements {
             lines.append(elementLine(element))
-        }
-        if elements.count > maximumElements {
-            lines.append("- [truncated: \(elements.count - maximumElements) additional elements remain in accessibility.json]")
         }
 
         let truncation = observation["truncation"] as? [String: Any]
@@ -549,27 +548,32 @@ final class CaptureEngine {
 }
 
 enum ClipboardWriter {
-    static func copyCombined(_ snapshot: Snapshot) throws {
-        let imageData = try Data(contentsOf: snapshot.screenshotURL)
+    static func copy(_ snapshot: Snapshot, mode: ClipboardMode) throws {
         let item = NSPasteboardItem()
-        item.setData(imageData, forType: .png)
-        item.setString(snapshot.contextText, forType: .string)
-        item.setData(snapshot.accessibilityJSON, forType: customContextType)
+
+        if mode.includesImage {
+            let imageData = try Data(contentsOf: snapshot.screenshotURL)
+            item.setData(imageData, forType: .png)
+        }
+        if mode.includesFullContext {
+            item.setString(snapshot.contextText, forType: .string)
+        }
+        if mode.includesFileReferences {
+            item.setString(fileReferenceText(snapshot), forType: .string)
+        }
+        if mode.includesStructuredContext {
+            item.setData(snapshot.accessibilityJSON, forType: customContextType)
+        }
+
         write(item)
     }
 
     static func copyScreenshot(_ snapshot: Snapshot) throws {
-        let imageData = try Data(contentsOf: snapshot.screenshotURL)
-        let item = NSPasteboardItem()
-        item.setData(imageData, forType: .png)
-        write(item)
+        try copy(snapshot, mode: .imageOnly)
     }
 
-    static func copyContext(_ snapshot: Snapshot) {
-        let item = NSPasteboardItem()
-        item.setString(snapshot.contextText, forType: .string)
-        item.setData(snapshot.accessibilityJSON, forType: customContextType)
-        write(item)
+    static func copyContext(_ snapshot: Snapshot) throws {
+        try copy(snapshot, mode: .accessibilityOnly)
     }
 
     static func describeClipboard() -> String {
@@ -586,6 +590,26 @@ enum ClipboardWriter {
         ].joined(separator: "\n")
     }
 
+    static func clipboardText() -> String {
+        NSPasteboard.general.string(forType: .string) ?? ""
+    }
+
+    private static func fileReferenceText(_ snapshot: Snapshot) -> String {
+        [
+            "# Open AppShot capture",
+            "",
+            "Captured: \(ISO8601DateFormatter().string(from: snapshot.capturedAt))",
+            "Application: \(snapshot.appName)",
+            "Window: \(snapshot.windowTitle)",
+            "Accessibility elements: \(snapshot.elementCount)",
+            "Screenshot: \(snapshot.screenshotURL.path)",
+            "Accessibility JSON: \(snapshot.accessibilityURL.path)",
+            "Readable context: \(snapshot.contextURL.path)",
+            "",
+            "These files remain local on this Mac.",
+        ].joined(separator: "\n") + "\n"
+    }
+
     private static func write(_ item: NSPasteboardItem) {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
@@ -600,7 +624,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemVali
     private var statusItem: NSStatusItem!
     private var statusMenuItem: NSMenuItem!
     private var hotkeyMenuItem: NSMenuItem!
-    private var copyCombinedMenuItem: NSMenuItem!
+    private var copyModeMenuItem: NSMenuItem!
     private var copyScreenshotMenuItem: NSMenuItem!
     private var copyContextMenuItem: NSMenuItem!
     private var revealMenuItem: NSMenuItem!
@@ -622,6 +646,9 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemVali
         model.hotkeyChangedAction = { [weak self] in
             self?.installHotkeyMonitor()
             self?.updatePermissionStatus()
+        }
+        model.clipboardModeChangedAction = { [weak self] in
+            self?.updateClipboardModeMenuItem()
         }
         buildMainMenu()
         buildMenuBar()
@@ -667,11 +694,14 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemVali
         menu.addItem(hotkeyMenuItem)
         menu.addItem(.separator())
 
-        copyCombinedMenuItem = targetedMenuItem(title: "Copy combined clipboard", action: #selector(copyCombined))
+        copyModeMenuItem = targetedMenuItem(
+            title: "Copy using \(model.clipboardMode.displayName)",
+            action: #selector(copyUsingClipboardMode)
+        )
         copyScreenshotMenuItem = targetedMenuItem(title: "Copy screenshot only", action: #selector(copyScreenshot))
         copyContextMenuItem = targetedMenuItem(title: "Copy Accessibility text only", action: #selector(copyContext))
         revealMenuItem = targetedMenuItem(title: "Reveal last capture", action: #selector(revealLastCapture))
-        for item in [copyCombinedMenuItem, copyScreenshotMenuItem, copyContextMenuItem, revealMenuItem] {
+        for item in [copyModeMenuItem, copyScreenshotMenuItem, copyContextMenuItem, revealMenuItem] {
             item?.isEnabled = false
             if let item { menu.addItem(item) }
         }
@@ -724,8 +754,8 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemVali
         captureMenu.addItem(.separator())
         captureMenu.addItem(
             targetedMenuItem(
-                title: "Copy Screenshot and Context",
-                action: #selector(copySelectedCombined),
+                title: "Copy Using Clipboard Mode",
+                action: #selector(copySelectedUsingClipboardMode),
                 keyEquivalent: "c",
                 modifierMask: [.command, .option]
             )
@@ -819,7 +849,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemVali
         }
 
         let selectionActions: [Selector] = [
-            #selector(copySelectedCombined),
+            #selector(copySelectedUsingClipboardMode),
             #selector(copySelectedScreenshot),
             #selector(copySelectedContext),
             #selector(revealSelectedCapture),
@@ -936,14 +966,14 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemVali
                 DispatchQueue.main.async {
                     do {
                         if CapturePreferences.copyAfterCapture {
-                            try ClipboardWriter.copyCombined(snapshot)
+                            try ClipboardWriter.copy(snapshot, mode: CapturePreferences.clipboardMode)
                         }
                         self.lastSnapshot = snapshot
                         self.captureInProgress = false
                         self.enableSnapshotActions()
                         self.model.captureCompleted(snapshot)
                         self.statusMenuItem.title = CapturePreferences.copyAfterCapture
-                            ? "Copied \(snapshot.appName), \(snapshot.elementCount) AX elements"
+                            ? "Copied \(snapshot.appName) using \(CapturePreferences.clipboardMode.displayName)"
                             : "Captured \(snapshot.appName), \(snapshot.elementCount) AX elements"
                         self.setStatusIcon(symbol: "checkmark.circle.fill")
                         CapturePreferences.captureSound.play()
@@ -965,17 +995,17 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemVali
     }
 
     private func enableSnapshotActions() {
-        copyCombinedMenuItem.isEnabled = true
+        copyModeMenuItem.isEnabled = true
         copyScreenshotMenuItem.isEnabled = true
         copyContextMenuItem.isEnabled = true
         revealMenuItem.isEnabled = true
     }
 
-    @objc private func copyCombined() {
+    @objc private func copyUsingClipboardMode() {
         guard let lastSnapshot else { return }
         do {
-            try ClipboardWriter.copyCombined(lastSnapshot)
-            showCopySuccess("Combined clipboard copied")
+            try ClipboardWriter.copy(lastSnapshot, mode: model.clipboardMode)
+            showCopySuccess("Copied using \(model.clipboardMode.displayName)")
         } catch {
             showFailure(error.localizedDescription)
         }
@@ -993,8 +1023,12 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemVali
 
     @objc private func copyContext() {
         guard let lastSnapshot else { return }
-        ClipboardWriter.copyContext(lastSnapshot)
-        showCopySuccess("Accessibility text copied")
+        do {
+            try ClipboardWriter.copyContext(lastSnapshot)
+            showCopySuccess("Accessibility text copied")
+        } catch {
+            showFailure(error.localizedDescription)
+        }
     }
 
     @objc private func revealLastCapture() {
@@ -1002,9 +1036,9 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemVali
         NSWorkspace.shared.activateFileViewerSelecting([lastSnapshot.contextURL])
     }
 
-    @objc private func copySelectedCombined() {
+    @objc private func copySelectedUsingClipboardMode() {
         guard let capture = model.selectedCapture else { return }
-        model.copyCombined(capture)
+        model.copyUsingClipboardMode(capture)
     }
 
     @objc private func copySelectedScreenshot() {
@@ -1080,6 +1114,10 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemVali
         hotkeyMenuItem.title = "Hotkey: \(model.captureHotkey.displayName)"
     }
 
+    private func updateClipboardModeMenuItem() {
+        copyModeMenuItem.title = "Copy using \(model.clipboardMode.displayName)"
+    }
+
     private func showCopySuccess(_ message: String) {
         statusMenuItem.title = message
         setStatusIcon(symbol: "checkmark.circle.fill")
@@ -1123,6 +1161,37 @@ private func runningApplication(from arguments: [String]) -> NSRunningApplicatio
     return NSWorkspace.shared.frontmostApplication
 }
 
+private func argumentValue(after flag: String, in arguments: [String]) -> String? {
+    guard let index = arguments.firstIndex(of: flag), arguments.indices.contains(index + 1) else { return nil }
+    return arguments[index + 1]
+}
+
+private func clipboardMode(from arguments: [String], default defaultMode: ClipboardMode) throws -> ClipboardMode {
+    guard let value = argumentValue(after: "--clipboard-mode", in: arguments) else { return defaultMode }
+    switch value {
+    case "full", ClipboardMode.imageAndFullContext.rawValue:
+        return .imageAndFullContext
+    case "references", ClipboardMode.imageAndReferences.rawValue:
+        return .imageAndReferences
+    case "image", ClipboardMode.imageOnly.rawValue:
+        return .imageOnly
+    case "accessibility", ClipboardMode.accessibilityOnly.rawValue:
+        return .accessibilityOnly
+    default:
+        throw AppShotError.invalidArguments("Unknown clipboard mode: \(value)")
+    }
+}
+
+private func snapshot(atDirectoryPath path: String) throws -> Snapshot {
+    let requestedURL = URL(fileURLWithPath: path, isDirectory: true).standardizedFileURL
+    guard let record = CaptureHistory.load().first(where: {
+        $0.directoryURL.standardizedFileURL == requestedURL
+    }) else {
+        throw AppShotError.invalidArguments("Capture was not found in history: \(path)")
+    }
+    return try record.snapshot()
+}
+
 private let arguments = CommandLine.arguments
 if arguments.contains("--accessibility-status") {
     print("trusted=\(AXIsProcessTrusted())")
@@ -1138,6 +1207,25 @@ if arguments.contains("--permissions-status") {
 if arguments.contains("--inspect-clipboard") {
     print(ClipboardWriter.describeClipboard())
     exit(EXIT_SUCCESS)
+}
+
+if arguments.contains("--clipboard-text") {
+    print(ClipboardWriter.clipboardText(), terminator: "")
+    exit(EXIT_SUCCESS)
+}
+
+if let capturePath = argumentValue(after: "--copy-capture", in: arguments) {
+    do {
+        let mode = try clipboardMode(from: arguments, default: .imageAndFullContext)
+        let snapshot = try snapshot(atDirectoryPath: capturePath)
+        try ClipboardWriter.copy(snapshot, mode: mode)
+        print("clipboard_mode=\(mode.rawValue)")
+        print(ClipboardWriter.describeClipboard())
+        exit(EXIT_SUCCESS)
+    } catch {
+        fputs("error=\(error.localizedDescription)\n", stderr)
+        exit(EXIT_FAILURE)
+    }
 }
 
 if arguments.contains("--capture-root") {
@@ -1166,12 +1254,14 @@ if arguments.contains("--capture-once") {
         guard let target = runningApplication(from: arguments) else {
             throw AppShotError.noTargetApplication
         }
+        let mode = try clipboardMode(from: arguments, default: .imageAndFullContext)
         let snapshot = try CaptureEngine().capture(application: target)
-        try ClipboardWriter.copyCombined(snapshot)
+        try ClipboardWriter.copy(snapshot, mode: mode)
         print("capture_directory=\(snapshot.directoryURL.path)")
         print("application=\(snapshot.appName)")
         print("window=\(snapshot.windowTitle)")
         print("elements=\(snapshot.elementCount)")
+        print("clipboard_mode=\(mode.rawValue)")
         print(ClipboardWriter.describeClipboard())
         exit(EXIT_SUCCESS)
     } catch {

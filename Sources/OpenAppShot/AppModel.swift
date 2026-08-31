@@ -165,6 +165,53 @@ enum CaptureSound: String, CaseIterable, Identifiable {
     }
 }
 
+enum ClipboardMode: String, CaseIterable, Identifiable {
+    case imageAndFullContext
+    case imageAndReferences
+    case imageOnly
+    case accessibilityOnly
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .imageAndFullContext: "Image + Full Accessibility"
+        case .imageAndReferences: "Image + File References"
+        case .imageOnly: "Image Only"
+        case .accessibilityOnly: "Accessibility Only"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .imageAndFullContext:
+            "Screenshot, readable text for every captured element, and redacted structured context."
+        case .imageAndReferences:
+            "Screenshot and local paths to the stored Accessibility files. Best for local agents and TUIs."
+        case .imageOnly:
+            "Screenshot pixels without Accessibility text or local paths."
+        case .accessibilityOnly:
+            "Readable and structured Accessibility context without screenshot pixels."
+        }
+    }
+
+    var includesImage: Bool {
+        self != .accessibilityOnly
+    }
+
+    var includesFullContext: Bool {
+        self == .imageAndFullContext || self == .accessibilityOnly
+    }
+
+    var includesFileReferences: Bool {
+        self == .imageAndReferences
+    }
+
+    var includesStructuredContext: Bool {
+        includesFullContext
+    }
+}
+
 enum CapturePreferences {
     private static let defaults = UserDefaults.standard
     private static let captureDirectoryKey = "captureDirectoryPath"
@@ -174,6 +221,7 @@ enum CapturePreferences {
     private static let captureSoundKey = "captureSoundName"
     private static let captureHotkeyKey = "captureHotkey"
     private static let confirmBeforeDeletingKey = "confirmBeforeDeleting"
+    private static let clipboardModeKey = "clipboardMode"
 
     static var defaultCaptureRootURL: URL {
         let applicationSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -253,6 +301,16 @@ enum CapturePreferences {
             return defaults.bool(forKey: confirmBeforeDeletingKey)
         }
         set { defaults.set(newValue, forKey: confirmBeforeDeletingKey) }
+    }
+
+    static var clipboardMode: ClipboardMode {
+        get {
+            guard let stored = defaults.string(forKey: clipboardModeKey),
+                  let mode = ClipboardMode(rawValue: stored)
+            else { return .imageAndFullContext }
+            return mode
+        }
+        set { defaults.set(newValue.rawValue, forKey: clipboardModeKey) }
     }
 }
 
@@ -345,6 +403,12 @@ final class AppModel: ObservableObject {
     @Published var copyAfterCapture = CapturePreferences.copyAfterCapture {
         didSet { CapturePreferences.copyAfterCapture = copyAfterCapture }
     }
+    @Published var clipboardMode = CapturePreferences.clipboardMode {
+        didSet {
+            CapturePreferences.clipboardMode = clipboardMode
+            clipboardModeChangedAction?()
+        }
+    }
     @Published var captureSound = CapturePreferences.captureSound {
         didSet { CapturePreferences.captureSound = captureSound }
     }
@@ -365,6 +429,7 @@ final class AppModel: ObservableObject {
     var captureAction: (() -> Void)?
     var showSettingsAction: (() -> Void)?
     var hotkeyChangedAction: (() -> Void)?
+    var clipboardModeChangedAction: (() -> Void)?
 
     init() {
         reloadHistory()
@@ -436,9 +501,15 @@ final class AppModel: ObservableObject {
         statusMessage = message
     }
 
-    func copyCombined(_ record: CaptureRecord) {
-        performCopy(label: "Screenshot and context copied") {
-            try ClipboardWriter.copyCombined(record.snapshot())
+    func copyUsingClipboardMode(_ record: CaptureRecord) {
+        performCopy(label: "Copied using \(clipboardMode.displayName)") {
+            try ClipboardWriter.copy(record.snapshot(), mode: clipboardMode)
+        }
+    }
+
+    func copyFullContext(_ record: CaptureRecord) {
+        performCopy(label: "Image and full Accessibility copied") {
+            try ClipboardWriter.copy(record.snapshot(), mode: .imageAndFullContext)
         }
     }
 
@@ -450,7 +521,7 @@ final class AppModel: ObservableObject {
 
     func copyContext(_ record: CaptureRecord) {
         performCopy(label: "Accessibility context copied") {
-            ClipboardWriter.copyContext(try record.snapshot())
+            try ClipboardWriter.copyContext(record.snapshot())
         }
     }
 
