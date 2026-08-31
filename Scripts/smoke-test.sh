@@ -7,7 +7,7 @@ APP_PATH="$REPO_ROOT/build/Open AppShot.app"
 BINARY="$APP_PATH/Contents/MacOS/OpenAppShot"
 ICON="$APP_PATH/Contents/Resources/AppIcon.icns"
 FIXTURE_BINARY="$REPO_ROOT/build/capture-fixture"
-OBSERVATION_ENGINE="${OPEN_APPSHOT_TEST_ENGINE:-native}"
+IMAGE_INSPECTOR="$REPO_ROOT/build/inspect-image"
 capture_directory=""
 test_succeeded=0
 
@@ -26,6 +26,14 @@ xcrun swiftc \
   -framework AppKit \
   "$REPO_ROOT/Tests/Fixtures/CaptureFixture.swift" \
   -o "$FIXTURE_BINARY"
+
+xcrun swiftc \
+  -O \
+  -warnings-as-errors \
+  -framework CoreGraphics \
+  -framework ImageIO \
+  "$REPO_ROOT/Tests/Support/InspectImage.swift" \
+  -o "$IMAGE_INSPECTOR"
 
 "$FIXTURE_BINARY" &
 fixture_pid=$!
@@ -58,19 +66,27 @@ assert_clipboard_shape() {
 }
 
 sleep 1
-output=$("$BINARY" --capture-once --pid "$fixture_pid" --clipboard-mode full --engine "$OBSERVATION_ENGINE")
+output=$("$BINARY" --capture-once --pid "$fixture_pid" --clipboard-mode full)
 capture_directory=$(printf '%s\n' "$output" | sed -n 's/^capture_directory=//p')
 
 [[ "$output" == *"window=Open AppShot Capture Fixture"* ]]
 [[ "$output" == *"png_bytes="* ]]
 [[ "$output" == *"text_characters="* ]]
-[[ "$output" == *"engine=$OBSERVATION_ENGINE"* ]]
+[[ "$output" == *"engine=native"* ]]
 [[ -n "$capture_directory" ]]
 [[ -s "$capture_directory/screenshot.png" ]]
 [[ -s "$capture_directory/thumbnail.png" ]]
 [[ -s "$capture_directory/accessibility.json" ]]
 [[ -s "$capture_directory/context.md" ]]
 [[ -s "$capture_directory/metadata.json" ]]
+
+image_metrics=$("$IMAGE_INSPECTOR" "$capture_directory/screenshot.png")
+opaque_fraction=$(printf '%s\n' "$image_metrics" | sed -n 's/^opaque_fraction=//p')
+opaque_width_coverage=$(printf '%s\n' "$image_metrics" | sed -n 's/^opaque_width_coverage=//p')
+opaque_height_coverage=$(printf '%s\n' "$image_metrics" | sed -n 's/^opaque_height_coverage=//p')
+awk -v value="$opaque_fraction" 'BEGIN { exit !(value >= 0.90) }'
+awk -v value="$opaque_width_coverage" 'BEGIN { exit !(value >= 0.99) }'
+awk -v value="$opaque_height_coverage" 'BEGIN { exit !(value >= 0.99) }'
 
 metadata_application=$(jq -r '.appName' "$capture_directory/metadata.json")
 metadata_window=$(jq -r '.windowTitle' "$capture_directory/metadata.json")
@@ -79,13 +95,8 @@ metadata_elements=$(jq -r '.elementCount' "$capture_directory/metadata.json")
 [[ "$metadata_window" == "Open AppShot Capture Fixture" ]]
 [[ "$metadata_elements" -gt 0 ]]
 
-if [[ "$OBSERVATION_ENGINE" == "native" ]]; then
-  runtime_host=$(jq -r '.engine' "$capture_directory/windows.json")
-  [[ "$runtime_host" == "native" ]]
-else
-  runtime_host=$(jq -r '.debug_logs[]? | select(contains("Runtime host"))' "$capture_directory/windows.json" | head -1)
-  [[ "$runtime_host" == *"local (in-process)"* ]]
-fi
+runtime_host=$(jq -r '.engine' "$capture_directory/windows.json")
+[[ "$runtime_host" == "native" ]]
 
 directory_mode=$(stat -f '%Sp' "$capture_directory")
 screenshot_mode=$(stat -f '%Sp' "$capture_directory/screenshot.png")
@@ -120,10 +131,11 @@ assert_clipboard_shape "$clipboard" yes yes yes
 
 printf '%s\n' "$output"
 printf '%s\n' "$runtime_host"
+printf '%s\n' "$image_metrics"
 printf '%s\n' "$clipboard"
 printf 'clipboard_modes=full,references,image,accessibility\n'
 printf 'history_count=%s\n' "$history_count"
 printf 'icon=%s\n' "$icon_file"
-printf 'observation_engine=%s\n' "$OBSERVATION_ENGINE"
+printf 'observation_engine=native\n'
 test_succeeded=1
 echo "smoke=GREEN"

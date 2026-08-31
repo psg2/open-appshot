@@ -12,9 +12,9 @@ AppKit lifecycle and global hotkey
   -> SwiftUI NavigationSplitView and Settings window
 
 CaptureEngine
-  -> ObservationEngine interface
-       -> NativeObservationEngine (default)
-       -> PeekabooObservationEngine (optional comparison adapter)
+  -> NativeObservationEngine
+       -> ScreenCaptureKit exact-window pixels
+       -> bounded macOS Accessibility traversal
   -> private capture bundle
   -> capture history
   -> multipart NSPasteboard item
@@ -27,7 +27,7 @@ CaptureEngine
 ```text
 Configured global hotkey or Capture
   -> last external NSRunningApplication
-  -> selected ObservationEngine adapter
+  -> NativeObservationEngine
   -> exact-window screenshot and bounded Accessibility observation
   -> secure-field redaction
   -> metadata and local capture bundle
@@ -35,7 +35,7 @@ Configured global hotkey or Capture
   -> configured NSPasteboard representations when auto-copy is enabled
 ```
 
-The native adapter uses public ScreenCaptureKit and Accessibility APIs directly and is the default. The optional Peekaboo adapter uses `--no-remote` and the CG capture engine so developers can compare outputs against the previous implementation. TCC responsibility stays with Open AppShot.
+The native capture uses public ScreenCaptureKit and Accessibility APIs directly. Single-window shadows are disabled before capture so the window fills the configured native-resolution canvas instead of being scaled down inside transparent padding. The smoke test asserts the output dimensions and opaque canvas coverage. TCC responsibility stays with Open AppShot.
 
 ## Capture storage
 
@@ -54,7 +54,7 @@ The directory uses mode `0700`; files use `0600`. `metadata.json` is the stable 
 
 ## UI state
 
-`AppModel` scans the configured capture root, the default root when a custom destination is active, and the legacy POC root. It keeps the current selection, deletion policy, pending deletion, permission status, capture progress, storage location, retention, sound, hotkey, observation engine, automatic-copy policy, and clipboard mode. A completed hotkey capture refreshes history and selects the new record.
+`AppModel` scans the configured capture root, the default root when a custom destination is active, and the legacy POC root. It keeps the current selection, deletion policy, pending deletion, permission status, capture progress, storage location, retention, sound, hotkey, automatic-copy policy, and clipboard mode. A completed hotkey capture refreshes history and selects the new record.
 
 The native UI has four visible boundaries:
 

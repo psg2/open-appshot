@@ -11,7 +11,7 @@ make setup
 make hooks
 ```
 
-`make setup` uses the checked-in `mise.toml` to install pinned versions of Gitleaks, ShellCheck, actionlint, jq, and Lefthook. Peekaboo is optional and is needed only for `make smoke-peekaboo` or `make smoke-engines`.
+`make setup` uses the checked-in `mise.toml` to install pinned versions of Gitleaks, ShellCheck, actionlint, jq, and Lefthook. Open AppShot has no runtime package dependency.
 
 ## Before opening a pull request
 
@@ -25,7 +25,6 @@ When capture, clipboard, or hotkey behavior changes, also run:
 
 ```bash
 make smoke
-make smoke-engines # when changing the observation interface or adapters
 make install
 make hotkey-smoke
 ```

@@ -29,7 +29,7 @@ The practical UX is:
 
 Do not build a new screen-capture and Accessibility engine. Keep Peekaboo as the signed capture host. If this moves beyond a prototype, build a small notarized helper around the validated contract, add configurable hotkeys and per-app deny rules, and test paste behavior in the exact chat clients that matter.
 
-This decision described the first-day prototype and is now superseded. Open AppShot has a native ScreenCaptureKit and Accessibility adapter as its default engine. The Peekaboo adapter remains available only for direct comparison while native coverage expands.
+This decision described the first-day prototype and is now superseded. Open AppShot now captures directly through public ScreenCaptureKit and Accessibility APIs. Peekaboo was retained briefly for deterministic comparison and removed after the native path matched its 1040 x 624 output, opaque canvas coverage, and eight-element AX result.
 
 ## Permission bug found during use
 

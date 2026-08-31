@@ -5,9 +5,7 @@ import ImageIO
 import ScreenCaptureKit
 import UniformTypeIdentifiers
 
-final class NativeObservationEngine: ObservationEngine {
-    let kind: ObservationEngineKind = .native
-
+final class NativeObservationEngine {
     private let fileManager = FileManager.default
     private let contentTimeout: DispatchTimeInterval = .seconds(5)
     private let screenshotTimeout: DispatchTimeInterval = .seconds(5)
@@ -40,7 +38,6 @@ final class NativeObservationEngine: ObservationEngine {
         try writeInventory(candidates: candidates, selected: window, to: inventoryURL)
 
         return ObservationResult(
-            engine: kind,
             window: ObservedWindow(
                 id: Int(window.windowID),
                 title: window.title.nonEmpty ?? selectedAXWindow?.title.nonEmpty ?? "Untitled window",
@@ -74,10 +71,15 @@ final class NativeObservationEngine: ObservationEngine {
         let filter = SCContentFilter(desktopIndependentWindow: window)
         let configuration = SCStreamConfiguration()
         let scale = max(CGFloat(filter.pointPixelScale), 1)
-        configuration.width = max(Int(filter.contentRect.width * scale), 1)
-        configuration.height = max(Int(filter.contentRect.height * scale), 1)
+        let expectedWidth = max(Int(filter.contentRect.width * scale), 1)
+        let expectedHeight = max(Int(filter.contentRect.height * scale), 1)
+        configuration.width = expectedWidth
+        configuration.height = expectedHeight
+        configuration.captureResolution = .best
         configuration.showsCursor = false
-        configuration.ignoreShadowsSingleWindow = false
+        configuration.ignoreShadowsSingleWindow = true
+        configuration.scalesToFit = true
+        configuration.includeChildWindows = false
 
         let semaphore = DispatchSemaphore(value: 0)
         let box = CallbackResultBox<CGImage>()
@@ -92,7 +94,13 @@ final class NativeObservationEngine: ObservationEngine {
         guard semaphore.wait(timeout: .now() + screenshotTimeout) == .success else {
             throw ObservationEngineError.screenCaptureTimedOut
         }
-        return try box.value()
+        let image = try box.value()
+        guard image.width == expectedWidth, image.height == expectedHeight else {
+            throw ObservationEngineError.screenCaptureFailed(
+                "ScreenCaptureKit returned \(image.width)x\(image.height) for an expected \(expectedWidth)x\(expectedHeight) window."
+            )
+        }
+        return image
     }
 
     private func preferredWindow(in windows: [SCWindow], accessibilityWindows: [AXWindowDescriptor]) -> SCWindow? {
@@ -151,7 +159,7 @@ final class NativeObservationEngine: ObservationEngine {
 
     private func writeInventory(candidates: [SCWindow], selected: SCWindow, to url: URL) throws {
         let inventory = NativeWindowInventory(
-            engine: kind.rawValue,
+            engine: "native",
             selectedWindowID: Int(selected.windowID),
             windows: candidates.map {
                 NativeWindowInventory.Item(

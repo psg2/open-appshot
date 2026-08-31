@@ -223,7 +223,6 @@ enum CapturePreferences {
     private static let captureHotkeyKey = "captureHotkey"
     private static let confirmBeforeDeletingKey = "confirmBeforeDeleting"
     private static let clipboardModeKey = "clipboardMode"
-    private static let observationEngineKey = "observationEngine"
 
     static var defaultCaptureRootURL: URL {
         let applicationSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -316,15 +315,6 @@ enum CapturePreferences {
         set { defaults.set(newValue.rawValue, forKey: clipboardModeKey) }
     }
 
-    static var observationEngineKind: ObservationEngineKind {
-        get {
-            guard let stored = defaults.string(forKey: observationEngineKey),
-                let engine = ObservationEngineKind(rawValue: stored)
-            else { return .native }
-            return engine
-        }
-        set { defaults.set(newValue.rawValue, forKey: observationEngineKey) }
-    }
 }
 
 enum CaptureHistory {
@@ -428,9 +418,6 @@ final class AppModel: ObservableObject {
     }
     @Published var captureSound = CapturePreferences.captureSound {
         didSet { CapturePreferences.captureSound = captureSound }
-    }
-    @Published var observationEngineKind = CapturePreferences.observationEngineKind {
-        didSet { CapturePreferences.observationEngineKind = observationEngineKind }
     }
     @Published var confirmBeforeDeleting = CapturePreferences.confirmBeforeDeleting {
         didSet {

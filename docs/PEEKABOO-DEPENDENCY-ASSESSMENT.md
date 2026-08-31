@@ -20,11 +20,11 @@ not copy Peekaboo's private ScreenCaptureKit fallback.
 
 ## Implementation status
 
-The recommendation was implemented on 2026-08-31. `ObservationEngine` is the
-shared interface, `NativeObservationEngine` is the default adapter, and
-`PeekabooObservationEngine` remains optional for direct comparison. Both adapters
-pass the deterministic capture and clipboard smoke test with the same eight AX
-elements. Normal setup and capture no longer require Peekaboo or Homebrew.
+The recommendation was implemented on 2026-08-31. `NativeObservationEngine`
+captures directly through public ScreenCaptureKit and Accessibility APIs. A
+temporary Peekaboo adapter verified the same 1040 x 624 output, 99.82% opaque pixel
+coverage, full width and height coverage, and eight AX elements. It was then
+removed. Normal setup and capture require neither Peekaboo nor Homebrew.
 
 ## Scope of this assessment
 
@@ -43,7 +43,7 @@ or Peekaboo's CLI and daemon features.
 
 ## Current Open AppShot contract
 
-The optional `PeekabooObservationEngine` starts three kinds of Peekaboo CLI operation:
+Before removal, the Peekaboo implementation started three kinds of CLI operation:
 
 1. `window list` selects a window and obtains its WindowServer ID, title, and bounds;
 2. `see` attempts an exact-window screenshot and AX observation together;

@@ -46,12 +46,12 @@ final class CaptureEngine {
     private let fileManager = FileManager.default
     private let baseDirectory: URL
     private let retentionDays: Int
-    private let observationEngine: any ObservationEngine
+    private let observationEngine: NativeObservationEngine
 
     init(
         baseDirectory: URL = CapturePreferences.captureRootURL,
         retentionDays: Int = CapturePreferences.retentionDays,
-        observationEngine: any ObservationEngine = CapturePreferences.observationEngineKind.makeEngine()
+        observationEngine: NativeObservationEngine = NativeObservationEngine()
     ) {
         self.baseDirectory = baseDirectory
         self.retentionDays = retentionDays
@@ -181,7 +181,7 @@ final class CaptureEngine {
             "PID: \(pid)",
             "Window: \(observation.window.title)",
             "Window ID: \(observation.window.id)",
-            "Observation engine: \(observation.engine.displayName)",
+            "Observation engine: Native macOS",
             "Capture strategy: \(captureStrategy)",
             "Accessibility elements: \(observation.elements.count)",
             "Capture directory: \(captureDirectory.path)",
@@ -922,14 +922,6 @@ private func clipboardMode(from arguments: [String], default defaultMode: Clipbo
     }
 }
 
-private func observationEngineKind(from arguments: [String], default defaultKind: ObservationEngineKind) throws -> ObservationEngineKind {
-    guard let value = argumentValue(after: "--engine", in: arguments) else { return defaultKind }
-    guard let kind = ObservationEngineKind(rawValue: value) else {
-        throw AppShotError.invalidArguments("Unknown observation engine: \(value)")
-    }
-    return kind
-}
-
 private func snapshot(atDirectoryPath path: String) throws -> Snapshot {
     let requestedURL = URL(fileURLWithPath: path, isDirectory: true).standardizedFileURL
     guard
@@ -1006,14 +998,13 @@ if arguments.contains("--capture-once") {
             throw AppShotError.noTargetApplication
         }
         let mode = try clipboardMode(from: arguments, default: .imageAndFullContext)
-        let engineKind = try observationEngineKind(from: arguments, default: CapturePreferences.observationEngineKind)
-        let snapshot = try CaptureEngine(observationEngine: engineKind.makeEngine()).capture(application: target)
+        let snapshot = try CaptureEngine().capture(application: target)
         try ClipboardWriter.copy(snapshot, mode: mode)
         print("capture_directory=\(snapshot.directoryURL.path)")
         print("application=\(snapshot.appName)")
         print("window=\(snapshot.windowTitle)")
         print("elements=\(snapshot.elementCount)")
-        print("engine=\(engineKind.rawValue)")
+        print("engine=native")
         print("strategy=\(snapshot.captureStrategy)")
         print("clipboard_mode=\(mode.rawValue)")
         print(ClipboardWriter.describeClipboard())

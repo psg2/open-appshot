@@ -26,7 +26,7 @@ make smoke
 make install
 ```
 
-`make smoke` launches a deterministic local fixture and captures it through the native ScreenCaptureKit and Accessibility adapter. It checks the PNG, Accessibility JSON, history metadata, private file permissions, and every clipboard mode. Peekaboo is no longer required; developers who already have it can run `make smoke-engines` to compare both adapters.
+`make smoke` launches a deterministic local fixture and captures it through ScreenCaptureKit and Accessibility. It checks that the window fills the PNG without shadow padding, then verifies the Accessibility JSON, history metadata, private file permissions, and every clipboard mode. Peekaboo is not required.
 
 After installation, exercise the real global-hotkey path:
 
@@ -90,7 +90,6 @@ The Capture menu exposes the window commands and their shortcuts:
 Open Settings with Command-comma to:
 
 - inspect both macOS permissions;
-- select the native engine or the optional Peekaboo comparison adapter;
 - record a custom global shortcut or restore the two-Option default;
 - choose or disable the confirmation sound and preview it;
 - choose a capture folder;
@@ -115,7 +114,7 @@ Each capture contains:
 - `accessibility.json`
 - `context.md`
 - `metadata.json`
-- native window inventory or optional Peekaboo diagnostics
+- native window inventory
 
 Directories use mode `0700` and files use `0600`. Secure Accessibility values are redacted. Open AppShot does not use OCR, AI providers, telemetry, or network upload. A screenshot can still contain anything visibly present in the selected window.
 
@@ -135,9 +134,8 @@ One pasteboard item advertises all representations for the selected mode. A rece
 ```text
 Sources/OpenAppShot/AppModel.swift  History, permissions, storage, and UI state
 Sources/OpenAppShot/Views.swift     Native SwiftUI windows and settings
-Sources/OpenAppShot/ObservationEngine.swift  Shared observation interface and models
-Sources/OpenAppShot/NativeObservationEngine.swift  ScreenCaptureKit and AX adapter
-Sources/OpenAppShot/PeekabooObservationEngine.swift  Optional comparison adapter
+Sources/OpenAppShot/ObservationModels.swift  Native observation result models
+Sources/OpenAppShot/NativeObservationEngine.swift  ScreenCaptureKit and AX capture
 Sources/OpenAppShot/main.swift      Capture storage, clipboard, menu bar, and hotkey
 Resources/Info.plist                Bundle identity and permission descriptions
 Resources/AppIcon.png               1024-pixel source for the native app icon

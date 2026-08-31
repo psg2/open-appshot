@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help setup hooks format format-check lint lint-shell lint-actions lint-plist test ci check scan-secrets build install smoke smoke-peekaboo smoke-engines hotkey-smoke clean
+.PHONY: help setup hooks format format-check lint lint-shell lint-actions lint-plist test ci check scan-secrets build install smoke hotkey-smoke clean
 
 help: ## Show available commands
 	@echo "Available commands:"
@@ -47,13 +47,8 @@ build: ## Build and ad hoc sign the app bundle
 install: ## Install the current build in /Applications
 	./Scripts/install-local.sh
 
-smoke: ## Exercise the native capture and clipboard behavior (requires macOS permissions)
+smoke: build ## Exercise the native capture and clipboard behavior (requires macOS permissions)
 	./Scripts/smoke-test.sh
-
-smoke-peekaboo: ## Exercise the optional Peekaboo adapter (requires Peekaboo and macOS permissions)
-	OPEN_APPSHOT_TEST_ENGINE=peekaboo ./Scripts/smoke-test.sh
-
-smoke-engines: smoke smoke-peekaboo ## Exercise and compare both observation adapters
 
 hotkey-smoke: ## Exercise the installed app's global hotkey (requires permissions)
 	./Scripts/hotkey-smoke-test.sh

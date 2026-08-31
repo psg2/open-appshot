@@ -1,48 +1,6 @@
-import AppKit
 import Foundation
 
-enum ObservationEngineKind: String, CaseIterable, Identifiable {
-    case native
-    case peekaboo
-
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .native:
-            return "Native macOS"
-        case .peekaboo:
-            return "Peekaboo"
-        }
-    }
-
-    var detail: String {
-        switch self {
-        case .native:
-            return "Uses ScreenCaptureKit and the macOS Accessibility API directly."
-        case .peekaboo:
-            return "Uses an installed Peekaboo CLI for comparison and diagnostics."
-        }
-    }
-
-    func makeEngine() -> any ObservationEngine {
-        switch self {
-        case .native:
-            return NativeObservationEngine()
-        case .peekaboo:
-            return PeekabooObservationEngine()
-        }
-    }
-}
-
-protocol ObservationEngine {
-    var kind: ObservationEngineKind { get }
-
-    func observe(application: NSRunningApplication, captureDirectory: URL) throws -> ObservationResult
-}
-
 struct ObservationResult {
-    let engine: ObservationEngineKind
     let window: ObservedWindow
     let elements: [ObservedElement]
     let truncation: ObservationTruncation
@@ -53,7 +11,7 @@ struct ObservationResult {
         let document = AccessibilityDocument(
             success: true,
             data: AccessibilityPayload(
-                engine: engine.rawValue,
+                engine: "native",
                 windowID: window.id,
                 windowTitle: window.title,
                 elementCount: elements.count,
@@ -190,9 +148,6 @@ enum ObservationEngineError: LocalizedError {
     case screenCaptureTimedOut
     case screenCaptureFailed(String)
     case missingScreenshot
-    case peekabooNotInstalled
-    case peekabooFailed(String)
-    case invalidPeekabooResponse(String)
 
     var errorDescription: String? {
         switch self {
@@ -204,12 +159,6 @@ enum ObservationEngineError: LocalizedError {
             return "Native macOS window capture failed: \(message)"
         case .missingScreenshot:
             return "The observation engine completed without producing a screenshot."
-        case .peekabooNotInstalled:
-            return "Peekaboo is selected but was not found in /opt/homebrew/bin, /usr/local/bin, or PEEKABOO_CLI_PATH."
-        case .peekabooFailed(let message):
-            return message
-        case .invalidPeekabooResponse(let message):
-            return "Peekaboo returned an invalid response: \(message)"
         }
     }
 }
