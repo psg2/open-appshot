@@ -3,3 +3,11 @@ build/
 .swiftpm/
 *.xcuserstate
 *.xcuserdata/
+.env
+.env.*
+!.env.example
+*.p12
+*.cer
+*.provisionprofile
+*.mobileprovision
+*.log

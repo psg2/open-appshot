@@ -1,12 +1,14 @@
-#!/bin/zsh
+#!/bin/bash
 set -euo pipefail
 
-SCRIPT_DIR="${0:A:h}"
-REPO_ROOT="${SCRIPT_DIR:h}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 INSTALLED_APP="/Applications/Open AppShot.app"
 INSTALLED_BINARY="$INSTALLED_APP/Contents/MacOS/OpenAppShot"
 TRIGGER="$REPO_ROOT/build/trigger-hotkey"
 FIXTURE_BINARY="$REPO_ROOT/build/capture-fixture"
+latest_capture=""
+test_succeeded=0
 
 if [[ ! -x "$INSTALLED_BINARY" ]]; then
   echo "Install the app first with: make install" >&2
@@ -46,9 +48,16 @@ done
 
 "$FIXTURE_BINARY" &
 fixture_pid=$!
+# ShellCheck does not treat a function referenced by a trap as invoked.
+# shellcheck disable=SC2329
 cleanup() {
   kill "$fixture_pid" 2>/dev/null || true
   wait "$fixture_pid" 2>/dev/null || true
+  if [[ "$test_succeeded" -eq 1 && -n "$latest_capture" && -d "$latest_capture" ]]; then
+    case "$latest_capture" in
+      "$CAPTURE_ROOT"/*) rm -rf -- "$latest_capture" ;;
+    esac
+  fi
 }
 trap cleanup EXIT
 sleep 1
@@ -87,6 +96,7 @@ for attempt in {1..100}; do
       printf '%s\n' "$runtime_host"
       printf '%s\n' "$clipboard"
       echo "hotkey_smoke=GREEN attempts=$attempt kind=$hotkey_kind"
+      test_succeeded=1
       exit 0
     fi
     if [[ -f "$latest_capture/windows.json" ]] && jq -e '.success == false' "$latest_capture/windows.json" >/dev/null 2>&1; then

@@ -1,8 +1,8 @@
-#!/bin/zsh
+#!/bin/bash
 set -euo pipefail
 
-SCRIPT_DIR="${0:A:h}"
-REPO_ROOT="${SCRIPT_DIR:h}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 BUILT_APP="$REPO_ROOT/build/Open AppShot.app"
 INSTALLED_APP="/Applications/Open AppShot.app"
 LEGACY_INSTALLED_APP="/Applications/AppShot Clipboard POC.app"

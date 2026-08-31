@@ -1,0 +1,32 @@
+# CodeRabbit configuration: https://docs.coderabbit.ai/reference/configuration
+language: "en"
+
+reviews:
+  profile: "chill"
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: true
+  auto_review:
+    enabled: true
+    drafts: false
+  path_filters:
+    - "!Resources/AppIcon.png"
+    - "!build/**"
+  path_instructions:
+    - path: "Sources/OpenAppShot/**"
+      instructions: |
+        This is a native macOS capture-only application. Flag changes that
+        expand from observation into UI control, weaken capture file
+        permissions, expose secure Accessibility values, or add network
+        access. Code must pass `make format-check` and compile with Swift
+        warnings treated as errors.
+    - path: "Scripts/**"
+      instructions: |
+        Scripts target Bash 3.2 or newer and must pass ShellCheck. Preserve
+        explicit paths and safe cleanup behavior; tests should assert public
+        CLI or bundle behavior rather than implementation details.
+
+chat:
+  auto_reply: true

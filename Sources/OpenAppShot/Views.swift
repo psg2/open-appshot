@@ -615,7 +615,9 @@ struct OpenAppShotSettingsView: View {
             } header: {
                 Text("Capture")
             } footer: {
-                Text("The clipboard mode applies to automatic copies and the main Copy command. Explicit image-only and Accessibility-only commands remain available.")
+                Text(
+                    "The clipboard mode applies to automatic copies and the main Copy command. Explicit image-only and Accessibility-only commands remain available."
+                )
             }
 
             Section {
@@ -650,7 +652,9 @@ struct OpenAppShotSettingsView: View {
             } header: {
                 Text("Storage")
             } footer: {
-                Text("New captures use this folder. Captures in the default folder stay visible, along with POC captures under /tmp until macOS clears them.")
+                Text(
+                    "New captures use this folder. Captures in the default folder stay visible, along with POC captures under /tmp until macOS clears them."
+                )
             }
 
             Section {

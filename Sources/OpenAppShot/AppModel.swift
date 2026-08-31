@@ -99,7 +99,7 @@ struct CaptureHotkey: Codable, Equatable {
 
     static func isReserved(_ hotkey: CaptureHotkey) -> Bool {
         guard hotkey.kind == .keyboard,
-              let keyCode = hotkey.keyCode
+            let keyCode = hotkey.keyCode
         else { return false }
 
         switch hotkey.modifiers {
@@ -225,7 +225,8 @@ enum CapturePreferences {
 
     static var defaultCaptureRootURL: URL {
         let applicationSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        return applicationSupport
+        return
+            applicationSupport
             .appendingPathComponent("Open AppShot", isDirectory: true)
             .appendingPathComponent("Captures", isDirectory: true)
     }
@@ -284,8 +285,8 @@ enum CapturePreferences {
     static var captureHotkey: CaptureHotkey {
         get {
             guard let data = defaults.data(forKey: captureHotkeyKey),
-                  let hotkey = try? JSONDecoder().decode(CaptureHotkey.self, from: data),
-                  !CaptureHotkey.isReserved(hotkey)
+                let hotkey = try? JSONDecoder().decode(CaptureHotkey.self, from: data),
+                !CaptureHotkey.isReserved(hotkey)
             else { return .dualOption }
             return hotkey
         }
@@ -306,7 +307,7 @@ enum CapturePreferences {
     static var clipboardMode: ClipboardMode {
         get {
             guard let stored = defaults.string(forKey: clipboardModeKey),
-                  let mode = ClipboardMode(rawValue: stored)
+                let mode = ClipboardMode(rawValue: stored)
             else { return .imageAndFullContext }
             return mode
         }
@@ -326,22 +327,25 @@ enum CaptureHistory {
             roots.append((legacy, true))
         }
 
-        return roots
+        return
+            roots
             .flatMap { load(root: $0.0, isLegacy: $0.1) }
             .sorted { $0.metadata.capturedAt > $1.metadata.capturedAt }
     }
 
     private static func load(root: URL, isLegacy: Bool) -> [CaptureRecord] {
-        guard let directories = try? FileManager.default.contentsOfDirectory(
-            at: root,
-            includingPropertiesForKeys: [.creationDateKey, .isDirectoryKey],
-            options: [.skipsHiddenFiles]
-        ) else { return [] }
+        guard
+            let directories = try? FileManager.default.contentsOfDirectory(
+                at: root,
+                includingPropertiesForKeys: [.creationDateKey, .isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            )
+        else { return [] }
 
         return directories.compactMap { directory in
             guard (try? directory.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true,
-                  FileManager.default.fileExists(atPath: directory.appendingPathComponent("screenshot.png").path),
-                  FileManager.default.fileExists(atPath: directory.appendingPathComponent("context.md").path)
+                FileManager.default.fileExists(atPath: directory.appendingPathComponent("screenshot.png").path),
+                FileManager.default.fileExists(atPath: directory.appendingPathComponent("context.md").path)
             else { return nil }
 
             let metadataURL = directory.appendingPathComponent("metadata.json")
@@ -362,7 +366,8 @@ enum CaptureHistory {
         let contextURL = directory.appendingPathComponent("context.md")
         guard let context = try? String(contentsOf: contextURL, encoding: .utf8) else { return nil }
 
-        let capturedAt = value(after: "Captured:", in: context)
+        let capturedAt =
+            value(after: "Captured:", in: context)
             .flatMap { ISO8601DateFormatter().date(from: $0) }
             ?? (try? directory.resourceValues(forKeys: [.creationDateKey]).creationDate)
             ?? .distantPast

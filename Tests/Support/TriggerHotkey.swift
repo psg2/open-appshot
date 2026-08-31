@@ -15,8 +15,9 @@ func post(_ keyCode: CGKeyCode, down: Bool, flags: UInt64) {
 
 let arguments = CommandLine.arguments.dropFirst()
 if arguments.count == 2,
-   let keyCodeValue = UInt16(arguments[arguments.startIndex]),
-   let flags = UInt64(arguments[arguments.index(after: arguments.startIndex)]) {
+    let keyCodeValue = UInt16(arguments[arguments.startIndex]),
+    let flags = UInt64(arguments[arguments.index(after: arguments.startIndex)])
+{
     let keyCode = CGKeyCode(keyCodeValue)
     post(keyCode, down: true, flags: flags)
     usleep(120_000)

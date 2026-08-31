@@ -1,16 +1,19 @@
-#!/bin/zsh
+#!/bin/bash
 set -euo pipefail
 
-SCRIPT_DIR="${0:A:h}"
-REPO_ROOT="${SCRIPT_DIR:h}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 APP_PATH="$REPO_ROOT/build/Open AppShot.app"
 BINARY="$APP_PATH/Contents/MacOS/OpenAppShot"
 ICON="$APP_PATH/Contents/Resources/AppIcon.icns"
 FIXTURE_BINARY="$REPO_ROOT/build/capture-fixture"
+capture_directory=""
+test_succeeded=0
 
 if [[ ! -x "$BINARY" || ! -s "$ICON" ]]; then
   "$SCRIPT_DIR/build.sh"
 fi
+CAPTURE_ROOT=$("$BINARY" --capture-root)
 
 [[ -s "$ICON" ]]
 icon_file=$(plutil -extract CFBundleIconFile raw "$APP_PATH/Contents/Info.plist")
@@ -28,6 +31,11 @@ fixture_pid=$!
 cleanup() {
   kill "$fixture_pid" 2>/dev/null || true
   wait "$fixture_pid" 2>/dev/null || true
+  if [[ "$test_succeeded" -eq 1 && -n "$capture_directory" && -d "$capture_directory" ]]; then
+    case "$capture_directory" in
+      "$CAPTURE_ROOT"/*) rm -rf -- "$capture_directory" ;;
+    esac
+  fi
 }
 trap cleanup EXIT
 
@@ -36,9 +44,12 @@ assert_clipboard_shape() {
   local expects_png="$2"
   local expects_text="$3"
   local expects_context="$4"
-  local png_bytes=$(printf '%s\n' "$output" | sed -n 's/^png_bytes=//p' | tail -1)
-  local text_characters=$(printf '%s\n' "$output" | sed -n 's/^text_characters=//p' | tail -1)
-  local context_bytes=$(printf '%s\n' "$output" | sed -n 's/^context_json_bytes=//p' | tail -1)
+  local png_bytes
+  local text_characters
+  local context_bytes
+  png_bytes=$(printf '%s\n' "$output" | sed -n 's/^png_bytes=//p' | tail -1)
+  text_characters=$(printf '%s\n' "$output" | sed -n 's/^text_characters=//p' | tail -1)
+  context_bytes=$(printf '%s\n' "$output" | sed -n 's/^context_json_bytes=//p' | tail -1)
 
   if [[ "$expects_png" == "yes" ]]; then [[ "$png_bytes" -gt 0 ]]; else [[ "$png_bytes" -eq 0 ]]; fi
   if [[ "$expects_text" == "yes" ]]; then [[ "$text_characters" -gt 0 ]]; else [[ "$text_characters" -eq 0 ]]; fi
@@ -106,4 +117,5 @@ printf '%s\n' "$clipboard"
 printf 'clipboard_modes=full,references,image,accessibility\n'
 printf 'history_count=%s\n' "$history_count"
 printf 'icon=%s\n' "$icon_file"
+test_succeeded=1
 echo "smoke=GREEN"

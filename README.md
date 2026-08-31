@@ -9,14 +9,13 @@ The installed bundle and executable are named Open AppShot. The app keeps the le
 ## Requirements
 
 - macOS 15 or later
-- Xcode command-line tools with Swift
+- Full Xcode with Swift
 - Peekaboo 4.2.2 or a compatible release
 
-Install Peekaboo from its official Homebrew tap:
+Install Peekaboo and the repository quality tools:
 
 ```sh
-brew tap steipete/tap
-brew install steipete/tap/peekaboo
+make setup
 ```
 
 ## Build and install
@@ -34,6 +33,27 @@ After installation, exercise the real global-hotkey path:
 ```sh
 make hotkey-smoke
 ```
+
+## Development quality gates
+
+Install the same local tools used by CI and enable the pre-push hook:
+
+```sh
+make setup
+make hooks
+```
+
+The main commands are:
+
+```sh
+make format        # rewrite Swift sources with swift-format
+make lint          # swift-format, ShellCheck, actionlint, and plist checks
+make test          # CI-safe bundle and command-line contract tests
+make scan-secrets  # full-history Gitleaks scan
+make check         # all publication gates above
+```
+
+`make test` does not need Accessibility or Screen Recording access. The capture and global-hotkey smoke tests remain local because GitHub-hosted runners cannot grant those macOS permissions.
 
 ## First run
 
@@ -122,13 +142,16 @@ Scripts/                            Build, install, and observable smoke tests
 Tests/Fixtures/                     Deterministic capture target
 Tests/Support/                      Synthetic configurable-hotkey event
 docs/                               Architecture and prototype findings
+.github/workflows/ci.yml            Secret scanning and macOS quality gates
+lefthook.yml                        Local pre-push quality gates
 ```
 
-Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the current boundaries and [docs/PROTOTYPE-VERDICT.md](docs/PROTOTYPE-VERDICT.md) for the original experiment results.
+Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the current boundaries, [docs/PROTOTYPE-VERDICT.md](docs/PROTOTYPE-VERDICT.md) for the original experiment results, and [docs/RELEASING.md](docs/RELEASING.md) for the publication checklist.
 
 ## Current project status
 
-- Local repository only. No Git remote is configured.
-- No open-source license has been selected.
+- CI, local hooks, formatting, linting, contract tests, Gitleaks, issue templates, and security guidance are ready.
+- The repository is still local; no Git remote is configured.
+- No open-source license has been selected, so the code is not ready to be published as open source yet.
 - Local builds use an ad hoc signature with a stable identifier-only designated requirement.
-- Public distribution still needs Developer ID signing and notarization.
+- Public binary distribution still needs Developer ID signing, hardened-runtime review, and notarization.

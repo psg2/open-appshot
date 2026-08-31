@@ -22,15 +22,15 @@ private enum AppShotError: LocalizedError {
             return "No frontmost application is available."
         case .peekabooNotInstalled:
             return "Peekaboo was not found in /opt/homebrew/bin, /usr/local/bin, or PEEKABOO_CLI_PATH."
-        case let .commandFailed(message):
+        case .commandFailed(let message):
             return message
-        case let .invalidResponse(message):
+        case .invalidResponse(let message):
             return "Peekaboo returned an invalid response: \(message)"
-        case let .noWindow(appName):
+        case .noWindow(let appName):
             return "No capturable window was found for \(appName)."
         case .missingScreenshot:
             return "Peekaboo completed without producing a screenshot."
-        case let .invalidArguments(message):
+        case .invalidArguments(let message):
             return message
         }
     }
@@ -97,14 +97,14 @@ final class CaptureEngine {
 
         let windowList = try jsonDictionary(windowListResult.stdout)
         guard (windowList["success"] as? Bool) == true,
-              let data = windowList["data"] as? [String: Any],
-              let windows = data["windows"] as? [[String: Any]]
+            let data = windowList["data"] as? [String: Any],
+            let windows = data["windows"] as? [[String: Any]]
         else {
             throw AppShotError.invalidResponse(jsonErrorMessage(windowList))
         }
 
         guard let window = preferredWindow(in: windows),
-              let windowID = integer(window["window_id"])
+            let windowID = integer(window["window_id"])
         else {
             throw AppShotError.noWindow(appName)
         }
@@ -134,9 +134,10 @@ final class CaptureEngine {
         let accessibilityJSON: Data
         let captureStrategy: String
         if combinedResult.status == 0,
-           let combinedResponse = try? jsonDictionary(combinedResult.stdout),
-           (combinedResponse["success"] as? Bool) == true,
-           let combinedData = combinedResponse["data"] as? [String: Any] {
+            let combinedResponse = try? jsonDictionary(combinedResult.stdout),
+            (combinedResponse["success"] as? Bool) == true,
+            let combinedData = combinedResponse["data"] as? [String: Any]
+        {
             observationData = combinedData
             accessibilityJSON = combinedResult.stdout
             captureStrategy = "combined screenshot + Accessibility"
@@ -158,8 +159,8 @@ final class CaptureEngine {
                 stderrName: "screenshot-capture.stderr.txt"
             )
             guard pixelResult.status == 0,
-                  let pixelResponse = try? jsonDictionary(pixelResult.stdout),
-                  (pixelResponse["success"] as? Bool) == true
+                let pixelResponse = try? jsonDictionary(pixelResult.stdout),
+                (pixelResponse["success"] as? Bool) == true
             else {
                 throw AppShotError.commandFailed(commandError("screenshot fallback", result: pixelResult))
             }
@@ -185,7 +186,7 @@ final class CaptureEngine {
             }
             let treeResponse = try jsonDictionary(treeResult.stdout)
             guard (treeResponse["success"] as? Bool) == true,
-                  let treeData = treeResponse["data"] as? [String: Any]
+                let treeData = treeResponse["data"] as? [String: Any]
             else {
                 throw AppShotError.invalidResponse(jsonErrorMessage(treeResponse))
             }
@@ -357,8 +358,7 @@ final class CaptureEngine {
 
     private func elementLine(_ element: [String: Any]) -> String {
         let role = cleanText(string(element["ax_role"]) ?? string(element["role"]) ?? "element", maximum: 80)
-        let secure = role.lowercased().contains("secure") ||
-            (string(element["role_description"]) ?? "").lowercased().contains("secure")
+        let secure = role.lowercased().contains("secure") || (string(element["role_description"]) ?? "").lowercased().contains("secure")
         if secure {
             return "- \(role): [secure value redacted]"
         }
@@ -391,7 +391,8 @@ final class CaptureEngine {
     }
 
     private func cleanText(_ value: String, maximum: Int) -> String {
-        let oneLine = value
+        let oneLine =
+            value
             .replacingOccurrences(of: "\r", with: " ")
             .replacingOccurrences(of: "\n", with: " ")
             .split(whereSeparator: { $0.isWhitespace })
@@ -402,8 +403,8 @@ final class CaptureEngine {
 
     private func compactJSONString(_ value: Any) -> String {
         guard JSONSerialization.isValidJSONObject(value),
-              let data = try? JSONSerialization.data(withJSONObject: value, options: [.sortedKeys]),
-              let text = String(data: data, encoding: .utf8)
+            let data = try? JSONSerialization.data(withJSONObject: value, options: [.sortedKeys]),
+            let text = String(data: data, encoding: .utf8)
         else { return "unavailable" }
         return text
     }
@@ -412,18 +413,19 @@ final class CaptureEngine {
         guard let source = CGImageSourceCreateWithURL(sourceURL as CFURL, nil) else {
             throw AppShotError.missingScreenshot
         }
-        let options = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: 320,
-        ] as CFDictionary
+        let options =
+            [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: 320,
+            ] as CFDictionary
         guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options),
-              let destination = CGImageDestinationCreateWithURL(
-                  destinationURL as CFURL,
-                  UTType.png.identifier as CFString,
-                  1,
-                  nil
-              )
+            let destination = CGImageDestinationCreateWithURL(
+                destinationURL as CFURL,
+                UTType.png.identifier as CFString,
+                1,
+                nil
+            )
         else {
             throw AppShotError.missingScreenshot
         }
@@ -438,7 +440,8 @@ final class CaptureEngine {
             throw AppShotError.invalidResponse("the root JSON value is not an object")
         }
         if var data = root["data"] as? [String: Any],
-           let elements = data["ui_elements"] as? [[String: Any]] {
+            let elements = data["ui_elements"] as? [[String: Any]]
+        {
             data["ui_elements"] = elements.map { element in
                 var sanitized = element
                 let role = (string(element["ax_role"]) ?? string(element["role"]) ?? "").lowercased()
@@ -872,7 +875,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemVali
             queue: .main
         ) { [weak self] notification in
             guard let application = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
-                  let external = self?.externalApplication(application)
+                let external = self?.externalApplication(application)
             else { return }
             self?.lastExternalApplication = external
         }
@@ -972,7 +975,8 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemVali
                         self.captureInProgress = false
                         self.enableSnapshotActions()
                         self.model.captureCompleted(snapshot)
-                        self.statusMenuItem.title = CapturePreferences.copyAfterCapture
+                        self.statusMenuItem.title =
+                            CapturePreferences.copyAfterCapture
                             ? "Copied \(snapshot.appName) using \(CapturePreferences.clipboardMode.displayName)"
                             : "Captured \(snapshot.appName), \(snapshot.elementCount) AX elements"
                         self.setStatusIcon(symbol: "checkmark.circle.fill")
@@ -1146,8 +1150,8 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemVali
 
     private func externalApplication(_ application: NSRunningApplication?) -> NSRunningApplication? {
         guard let application,
-              application.processIdentifier != ProcessInfo.processInfo.processIdentifier,
-              application.bundleIdentifier != appBundleIdentifier
+            application.processIdentifier != ProcessInfo.processInfo.processIdentifier,
+            application.bundleIdentifier != appBundleIdentifier
         else { return nil }
         return application
     }
@@ -1155,7 +1159,8 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemVali
 
 private func runningApplication(from arguments: [String]) -> NSRunningApplication? {
     if let pidIndex = arguments.firstIndex(of: "--pid"), arguments.indices.contains(pidIndex + 1),
-       let pid = Int32(arguments[pidIndex + 1]) {
+        let pid = Int32(arguments[pidIndex + 1])
+    {
         return NSRunningApplication(processIdentifier: pid)
     }
     return NSWorkspace.shared.frontmostApplication
@@ -1184,9 +1189,11 @@ private func clipboardMode(from arguments: [String], default defaultMode: Clipbo
 
 private func snapshot(atDirectoryPath path: String) throws -> Snapshot {
     let requestedURL = URL(fileURLWithPath: path, isDirectory: true).standardizedFileURL
-    guard let record = CaptureHistory.load().first(where: {
-        $0.directoryURL.standardizedFileURL == requestedURL
-    }) else {
+    guard
+        let record = CaptureHistory.load().first(where: {
+            $0.directoryURL.standardizedFileURL == requestedURL
+        })
+    else {
         throw AppShotError.invalidArguments("Capture was not found in history: \(path)")
     }
     return try record.snapshot()
@@ -1242,7 +1249,8 @@ if arguments.contains("--hotkey-json") {
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.sortedKeys]
     if let data = try? encoder.encode(CapturePreferences.captureHotkey),
-       let value = String(data: data, encoding: .utf8) {
+        let value = String(data: data, encoding: .utf8)
+    {
         print(value)
         exit(EXIT_SUCCESS)
     }
