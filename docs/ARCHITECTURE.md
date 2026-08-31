@@ -84,3 +84,6 @@ Local builds are ad hoc signed with an identifier-only designated requirement. T
 - Clipboard representation selection in each target chat client
 - Per-app deny rules and visible screenshot redaction
 - Whether to depend on Peekaboo or extract a smaller observation-only component
+
+The source-level assessment and proposed migration are documented in
+[PEEKABOO-DEPENDENCY-ASSESSMENT.md](PEEKABOO-DEPENDENCY-ASSESSMENT.md).
