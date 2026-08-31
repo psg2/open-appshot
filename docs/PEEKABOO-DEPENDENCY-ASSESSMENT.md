@@ -18,6 +18,14 @@ validate it in parallel with the current engine, and then remove the Homebrew
 runtime requirement. Do not embed the full `PeekabooAutomationKit` product and do
 not copy Peekaboo's private ScreenCaptureKit fallback.
 
+## Implementation status
+
+The recommendation was implemented on 2026-08-31. `ObservationEngine` is the
+shared interface, `NativeObservationEngine` is the default adapter, and
+`PeekabooObservationEngine` remains optional for direct comparison. Both adapters
+pass the deterministic capture and clipboard smoke test with the same eight AX
+elements. Normal setup and capture no longer require Peekaboo or Homebrew.
+
 ## Scope of this assessment
 
 The source review used the official [openclaw/Peekaboo repository](https://github.com/openclaw/Peekaboo)
@@ -35,7 +43,7 @@ or Peekaboo's CLI and daemon features.
 
 ## Current Open AppShot contract
 
-`CaptureEngine` currently starts three kinds of Peekaboo CLI operation:
+The optional `PeekabooObservationEngine` starts three kinds of Peekaboo CLI operation:
 
 1. `window list` selects a window and obtains its WindowServer ID, title, and bounds;
 2. `see` attempts an exact-window screenshot and AX observation together;

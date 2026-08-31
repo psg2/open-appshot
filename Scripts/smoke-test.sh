@@ -7,6 +7,7 @@ APP_PATH="$REPO_ROOT/build/Open AppShot.app"
 BINARY="$APP_PATH/Contents/MacOS/OpenAppShot"
 ICON="$APP_PATH/Contents/Resources/AppIcon.icns"
 FIXTURE_BINARY="$REPO_ROOT/build/capture-fixture"
+OBSERVATION_ENGINE="${OPEN_APPSHOT_TEST_ENGINE:-native}"
 capture_directory=""
 test_succeeded=0
 
@@ -57,12 +58,13 @@ assert_clipboard_shape() {
 }
 
 sleep 1
-output=$("$BINARY" --capture-once --pid "$fixture_pid" --clipboard-mode full)
+output=$("$BINARY" --capture-once --pid "$fixture_pid" --clipboard-mode full --engine "$OBSERVATION_ENGINE")
 capture_directory=$(printf '%s\n' "$output" | sed -n 's/^capture_directory=//p')
 
 [[ "$output" == *"window=Open AppShot Capture Fixture"* ]]
 [[ "$output" == *"png_bytes="* ]]
 [[ "$output" == *"text_characters="* ]]
+[[ "$output" == *"engine=$OBSERVATION_ENGINE"* ]]
 [[ -n "$capture_directory" ]]
 [[ -s "$capture_directory/screenshot.png" ]]
 [[ -s "$capture_directory/thumbnail.png" ]]
@@ -77,8 +79,13 @@ metadata_elements=$(jq -r '.elementCount' "$capture_directory/metadata.json")
 [[ "$metadata_window" == "Open AppShot Capture Fixture" ]]
 [[ "$metadata_elements" -gt 0 ]]
 
-runtime_host=$(jq -r '.debug_logs[]? | select(contains("Runtime host"))' "$capture_directory/windows.json" | head -1)
-[[ "$runtime_host" == *"local (in-process)"* ]]
+if [[ "$OBSERVATION_ENGINE" == "native" ]]; then
+  runtime_host=$(jq -r '.engine' "$capture_directory/windows.json")
+  [[ "$runtime_host" == "native" ]]
+else
+  runtime_host=$(jq -r '.debug_logs[]? | select(contains("Runtime host"))' "$capture_directory/windows.json" | head -1)
+  [[ "$runtime_host" == *"local (in-process)"* ]]
+fi
 
 directory_mode=$(stat -f '%Sp' "$capture_directory")
 screenshot_mode=$(stat -f '%Sp' "$capture_directory/screenshot.png")
@@ -117,5 +124,6 @@ printf '%s\n' "$clipboard"
 printf 'clipboard_modes=full,references,image,accessibility\n'
 printf 'history_count=%s\n' "$history_count"
 printf 'icon=%s\n' "$icon_file"
+printf 'observation_engine=%s\n' "$OBSERVATION_ENGINE"
 test_succeeded=1
 echo "smoke=GREEN"

@@ -19,6 +19,7 @@ xcrun swiftc \
   -framework AppKit \
   -framework ApplicationServices \
   -framework ImageIO \
+  -framework ScreenCaptureKit \
   -framework SwiftUI \
   -framework UniformTypeIdentifiers \
   "$REPO_ROOT/Sources/OpenAppShot/"*.swift \

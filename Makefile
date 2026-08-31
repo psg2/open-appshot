@@ -1,14 +1,14 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help setup hooks format format-check lint lint-shell lint-actions lint-plist test ci check scan-secrets build install smoke hotkey-smoke clean
+.PHONY: help setup hooks format format-check lint lint-shell lint-actions lint-plist test ci check scan-secrets build install smoke smoke-peekaboo smoke-engines hotkey-smoke clean
 
 help: ## Show available commands
 	@echo "Available commands:"
 	@echo ""
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
-setup: ## Install local quality tools with Homebrew
-	brew bundle
+setup: ## Install pinned local quality tools with mise
+	mise install
 
 hooks: ## Install the repository Git hooks
 	lefthook install
@@ -47,8 +47,13 @@ build: ## Build and ad hoc sign the app bundle
 install: ## Install the current build in /Applications
 	./Scripts/install-local.sh
 
-smoke: ## Exercise capture and clipboard behavior (requires macOS permissions)
+smoke: ## Exercise the native capture and clipboard behavior (requires macOS permissions)
 	./Scripts/smoke-test.sh
+
+smoke-peekaboo: ## Exercise the optional Peekaboo adapter (requires Peekaboo and macOS permissions)
+	OPEN_APPSHOT_TEST_ENGINE=peekaboo ./Scripts/smoke-test.sh
+
+smoke-engines: smoke smoke-peekaboo ## Exercise and compare both observation adapters
 
 hotkey-smoke: ## Exercise the installed app's global hotkey (requires permissions)
 	./Scripts/hotkey-smoke-test.sh

@@ -12,7 +12,9 @@ AppKit lifecycle and global hotkey
   -> SwiftUI NavigationSplitView and Settings window
 
 CaptureEngine
-  -> local Peekaboo process
+  -> ObservationEngine interface
+       -> NativeObservationEngine (default)
+       -> PeekabooObservationEngine (optional comparison adapter)
   -> private capture bundle
   -> capture history
   -> multipart NSPasteboard item
@@ -25,16 +27,15 @@ CaptureEngine
 ```text
 Configured global hotkey or Capture
   -> last external NSRunningApplication
-  -> Peekaboo local window inventory
-  -> exact-window screenshot and Accessibility observation
-  -> split screenshot and AX fallback when combined observation fails
+  -> selected ObservationEngine adapter
+  -> exact-window screenshot and bounded Accessibility observation
   -> secure-field redaction
   -> metadata and local capture bundle
   -> history refresh
   -> configured NSPasteboard representations when auto-copy is enabled
 ```
 
-Peekaboo commands always use `--no-remote`. Pixel capture also selects `--capture-engine cg`. TCC responsibility stays with Open AppShot instead of moving to an on-demand Peekaboo daemon.
+The native adapter uses public ScreenCaptureKit and Accessibility APIs directly and is the default. The optional Peekaboo adapter uses `--no-remote` and the CG capture engine so developers can compare outputs against the previous implementation. TCC responsibility stays with Open AppShot.
 
 ## Capture storage
 
@@ -53,7 +54,7 @@ The directory uses mode `0700`; files use `0600`. `metadata.json` is the stable 
 
 ## UI state
 
-`AppModel` scans the configured capture root, the default root when a custom destination is active, and the legacy POC root. It keeps the current selection, deletion policy, pending deletion, permission status, capture progress, storage location, retention, sound, hotkey, automatic-copy policy, and clipboard mode. A completed hotkey capture refreshes history and selects the new record.
+`AppModel` scans the configured capture root, the default root when a custom destination is active, and the legacy POC root. It keeps the current selection, deletion policy, pending deletion, permission status, capture progress, storage location, retention, sound, hotkey, observation engine, automatic-copy policy, and clipboard mode. A completed hotkey capture refreshes history and selects the new record.
 
 The native UI has four visible boundaries:
 
@@ -80,10 +81,8 @@ Local builds are ad hoc signed with an identifier-only designated requirement. T
 
 - Developer ID ownership and release signing
 - License
-- Supported Peekaboo version range
 - Clipboard representation selection in each target chat client
 - Per-app deny rules and visible screenshot redaction
-- Whether to depend on Peekaboo or extract a smaller observation-only component
 
-The source-level assessment and proposed migration are documented in
+The source-level assessment that led to the native adapter is documented in
 [PEEKABOO-DEPENDENCY-ASSESSMENT.md](PEEKABOO-DEPENDENCY-ASSESSMENT.md).

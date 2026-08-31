@@ -570,6 +570,17 @@ struct OpenAppShotSettingsView: View {
             }
 
             Section {
+                VStack(alignment: .leading, spacing: 6) {
+                    Picker("Capture engine", selection: $model.observationEngineKind) {
+                        ForEach(ObservationEngineKind.allCases) { engine in
+                            Text(engine.displayName).tag(engine)
+                        }
+                    }
+                    Text(model.observationEngineKind.detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 LabeledContent("Hotkey") {
                     HStack(spacing: 6) {
                         HotkeyBadge(hotkey: model.captureHotkey)

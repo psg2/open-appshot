@@ -25,9 +25,11 @@ The practical UX is:
 - Helium rejected Peekaboo's combined exact-window observation. The read-only split fallback recovered a valid screenshot and 264 AX elements.
 - The final clipboard simultaneously advertised PNG, UTF-8 text, TIFF compatibility types, and the custom sanitized JSON type.
 
-## Product decision
+## Historical product decision
 
 Do not build a new screen-capture and Accessibility engine. Keep Peekaboo as the signed capture host. If this moves beyond a prototype, build a small notarized helper around the validated contract, add configurable hotkeys and per-app deny rules, and test paste behavior in the exact chat clients that matter.
+
+This decision described the first-day prototype and is now superseded. Open AppShot has a native ScreenCaptureKit and Accessibility adapter as its default engine. The Peekaboo adapter remains available only for direct comparison while native coverage expands.
 
 ## Permission bug found during use
 

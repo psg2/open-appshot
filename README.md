@@ -10,9 +10,9 @@ The installed bundle and executable are named Open AppShot. The app keeps the le
 
 - macOS 15 or later
 - Full Xcode with Swift
-- Peekaboo 4.2.2 or a compatible release
+- [mise](https://mise.jdx.dev/) for pinned repository tools
 
-Install Peekaboo and the repository quality tools:
+Install the repository quality tools:
 
 ```sh
 make setup
@@ -26,7 +26,7 @@ make smoke
 make install
 ```
 
-`make smoke` launches a deterministic local fixture and captures it through the built command-line entry point. It checks the PNG, Accessibility JSON, history metadata, private file permissions, local Peekaboo runtime, and every clipboard mode.
+`make smoke` launches a deterministic local fixture and captures it through the native ScreenCaptureKit and Accessibility adapter. It checks the PNG, Accessibility JSON, history metadata, private file permissions, and every clipboard mode. Peekaboo is no longer required; developers who already have it can run `make smoke-engines` to compare both adapters.
 
 After installation, exercise the real global-hotkey path:
 
@@ -90,6 +90,7 @@ The Capture menu exposes the window commands and their shortcuts:
 Open Settings with Command-comma to:
 
 - inspect both macOS permissions;
+- select the native engine or the optional Peekaboo comparison adapter;
 - record a custom global shortcut or restore the two-Option default;
 - choose or disable the confirmation sound and preview it;
 - choose a capture folder;
@@ -114,7 +115,7 @@ Each capture contains:
 - `accessibility.json`
 - `context.md`
 - `metadata.json`
-- local Peekaboo diagnostics
+- native window inventory or optional Peekaboo diagnostics
 
 Directories use mode `0700` and files use `0600`. Secure Accessibility values are redacted. Open AppShot does not use OCR, AI providers, telemetry, or network upload. A screenshot can still contain anything visibly present in the selected window.
 
@@ -134,7 +135,10 @@ One pasteboard item advertises all representations for the selected mode. A rece
 ```text
 Sources/OpenAppShot/AppModel.swift  History, permissions, storage, and UI state
 Sources/OpenAppShot/Views.swift     Native SwiftUI windows and settings
-Sources/OpenAppShot/main.swift      Capture engine, clipboard, menu bar, and hotkey
+Sources/OpenAppShot/ObservationEngine.swift  Shared observation interface and models
+Sources/OpenAppShot/NativeObservationEngine.swift  ScreenCaptureKit and AX adapter
+Sources/OpenAppShot/PeekabooObservationEngine.swift  Optional comparison adapter
+Sources/OpenAppShot/main.swift      Capture storage, clipboard, menu bar, and hotkey
 Resources/Info.plist                Bundle identity and permission descriptions
 Resources/AppIcon.png               1024-pixel source for the native app icon
 CONTEXT.md                           Canonical capture and clipboard vocabulary
@@ -143,6 +147,7 @@ Tests/Fixtures/                     Deterministic capture target
 Tests/Support/                      Synthetic configurable-hotkey event
 docs/                               Architecture and prototype findings
 .github/workflows/ci.yml            Secret scanning and macOS quality gates
+mise.toml                           Pinned local and CI quality tools
 lefthook.yml                        Local pre-push quality gates
 ```
 

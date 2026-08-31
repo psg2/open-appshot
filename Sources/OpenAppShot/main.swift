@@ -9,10 +9,7 @@ let customContextType = NSPasteboard.PasteboardType("com.psg2.appshot-context-js
 
 private enum AppShotError: LocalizedError {
     case noTargetApplication
-    case peekabooNotInstalled
     case commandFailed(String)
-    case invalidResponse(String)
-    case noWindow(String)
     case missingScreenshot
     case invalidArguments(String)
 
@@ -20,16 +17,10 @@ private enum AppShotError: LocalizedError {
         switch self {
         case .noTargetApplication:
             return "No frontmost application is available."
-        case .peekabooNotInstalled:
-            return "Peekaboo was not found in /opt/homebrew/bin, /usr/local/bin, or PEEKABOO_CLI_PATH."
         case .commandFailed(let message):
             return message
-        case .invalidResponse(let message):
-            return "Peekaboo returned an invalid response: \(message)"
-        case .noWindow(let appName):
-            return "No capturable window was found for \(appName)."
         case .missingScreenshot:
-            return "Peekaboo completed without producing a screenshot."
+            return "The capture engine completed without producing a screenshot."
         case .invalidArguments(let message):
             return message
         }
@@ -48,25 +39,23 @@ struct Snapshot {
     let appName: String
     let windowTitle: String
     let elementCount: Int
-}
-
-private struct ProcessResult {
-    let status: Int32
-    let stdout: Data
-    let stderr: Data
+    let captureStrategy: String
 }
 
 final class CaptureEngine {
     private let fileManager = FileManager.default
     private let baseDirectory: URL
     private let retentionDays: Int
+    private let observationEngine: any ObservationEngine
 
     init(
         baseDirectory: URL = CapturePreferences.captureRootURL,
-        retentionDays: Int = CapturePreferences.retentionDays
+        retentionDays: Int = CapturePreferences.retentionDays,
+        observationEngine: any ObservationEngine = CapturePreferences.observationEngineKind.makeEngine()
     ) {
         self.baseDirectory = baseDirectory
         self.retentionDays = retentionDays
+        self.observationEngine = observationEngine
     }
 
     func capture(application: NSRunningApplication) throws -> Snapshot {
@@ -84,122 +73,11 @@ final class CaptureEngine {
 
         let pid = application.processIdentifier
         let appName = application.localizedName ?? application.bundleIdentifier ?? "PID \(pid)"
-        let windowListURL = captureDirectory.appendingPathComponent("windows.json")
-        let windowListResult = try runPeekaboo(
-            arguments: ["window", "list", "--pid", String(pid), "--json", "--no-remote"],
-            captureDirectory: captureDirectory,
-            stdoutURL: windowListURL,
-            stderrName: "windows.stderr.txt"
-        )
-        guard windowListResult.status == 0 else {
-            throw AppShotError.commandFailed(commandError("window list", result: windowListResult))
-        }
-
-        let windowList = try jsonDictionary(windowListResult.stdout)
-        guard (windowList["success"] as? Bool) == true,
-            let data = windowList["data"] as? [String: Any],
-            let windows = data["windows"] as? [[String: Any]]
-        else {
-            throw AppShotError.invalidResponse(jsonErrorMessage(windowList))
-        }
-
-        guard let window = preferredWindow(in: windows),
-            let windowID = integer(window["window_id"])
-        else {
-            throw AppShotError.noWindow(appName)
-        }
-
-        let windowTitle = string(window["window_title"]) ?? "Untitled window"
+        let observation = try observationEngine.observe(application: application, captureDirectory: captureDirectory)
         let screenshotURL = captureDirectory.appendingPathComponent("screenshot.png")
         let accessibilityURL = captureDirectory.appendingPathComponent("accessibility.json")
-        let combinedAttemptURL = captureDirectory.appendingPathComponent("combined-attempt.json")
-        let combinedResult = try runPeekaboo(
-            arguments: [
-                "see",
-                "--pid", String(pid),
-                "--window-id", String(windowID),
-                "--json",
-                "--depth", "20",
-                "--max-elements", "1500",
-                "--path", screenshotURL.path,
-                "--capture-engine", "cg",
-                "--no-remote",
-            ],
-            captureDirectory: captureDirectory,
-            stdoutURL: combinedAttemptURL,
-            stderrName: "combined-attempt.stderr.txt"
-        )
-
-        let observationData: [String: Any]
-        let accessibilityJSON: Data
-        let captureStrategy: String
-        if combinedResult.status == 0,
-            let combinedResponse = try? jsonDictionary(combinedResult.stdout),
-            (combinedResponse["success"] as? Bool) == true,
-            let combinedData = combinedResponse["data"] as? [String: Any]
-        {
-            observationData = combinedData
-            accessibilityJSON = combinedResult.stdout
-            captureStrategy = "combined screenshot + Accessibility"
-        } else {
-            let pixelResponseURL = captureDirectory.appendingPathComponent("screenshot-capture.json")
-            let pixelResult = try runPeekaboo(
-                arguments: [
-                    "see",
-                    "--pid", String(pid),
-                    "--window-id", String(windowID),
-                    "--no-elements",
-                    "--json",
-                    "--path", screenshotURL.path,
-                    "--capture-engine", "cg",
-                    "--no-remote",
-                ],
-                captureDirectory: captureDirectory,
-                stdoutURL: pixelResponseURL,
-                stderrName: "screenshot-capture.stderr.txt"
-            )
-            guard pixelResult.status == 0,
-                let pixelResponse = try? jsonDictionary(pixelResult.stdout),
-                (pixelResponse["success"] as? Bool) == true
-            else {
-                throw AppShotError.commandFailed(commandError("screenshot fallback", result: pixelResult))
-            }
-
-            let treeResult = try runPeekaboo(
-                arguments: [
-                    "see",
-                    "--pid", String(pid),
-                    "--window-id", String(windowID),
-                    "--tree",
-                    "--no-screenshot",
-                    "--json",
-                    "--depth", "20",
-                    "--max-elements", "1500",
-                    "--no-remote",
-                ],
-                captureDirectory: captureDirectory,
-                stdoutURL: accessibilityURL,
-                stderrName: "accessibility-capture.stderr.txt"
-            )
-            guard treeResult.status == 0 else {
-                throw AppShotError.commandFailed(commandError("Accessibility fallback", result: treeResult))
-            }
-            let treeResponse = try jsonDictionary(treeResult.stdout)
-            guard (treeResponse["success"] as? Bool) == true,
-                let treeData = treeResponse["data"] as? [String: Any]
-            else {
-                throw AppShotError.invalidResponse(jsonErrorMessage(treeResponse))
-            }
-            observationData = treeData
-            accessibilityJSON = treeResult.stdout
-            captureStrategy = "split screenshot + Accessibility fallback"
-        }
-
-        let sanitizedAccessibilityJSON = try sanitizedJSON(accessibilityJSON)
-        try sanitizedAccessibilityJSON.write(to: accessibilityURL, options: .atomic)
-        if let sanitizedCombinedAttempt = try? sanitizedJSON(combinedResult.stdout) {
-            try sanitizedCombinedAttempt.write(to: combinedAttemptURL, options: .atomic)
-        }
+        let accessibilityJSON = try observation.accessibilityJSON()
+        try accessibilityJSON.write(to: accessibilityURL, options: .atomic)
 
         guard fileManager.fileExists(atPath: screenshotURL.path) else {
             throw AppShotError.missingScreenshot
@@ -211,11 +89,9 @@ final class CaptureEngine {
             appName: appName,
             bundleIdentifier: application.bundleIdentifier,
             pid: pid,
-            windowTitle: windowTitle,
-            windowID: windowID,
-            observation: observationData,
+            observation: observation,
             captureDirectory: captureDirectory,
-            captureStrategy: captureStrategy
+            captureStrategy: observation.captureStrategy
         )
         let contextURL = captureDirectory.appendingPathComponent("context.md")
         try contextText.write(to: contextURL, atomically: true, encoding: .utf8)
@@ -225,9 +101,9 @@ final class CaptureEngine {
             capturedAt: capturedAt,
             appName: appName,
             bundleIdentifier: application.bundleIdentifier,
-            windowTitle: windowTitle,
-            elementCount: integer(observationData["element_count"]) ?? 0,
-            captureStrategy: captureStrategy
+            windowTitle: observation.window.title,
+            elementCount: observation.elements.count,
+            captureStrategy: observation.captureStrategy
         )
         let metadataURL = captureDirectory.appendingPathComponent("metadata.json")
         let encoder = JSONEncoder()
@@ -236,16 +112,7 @@ final class CaptureEngine {
         try encoder.encode(metadata).write(to: metadataURL, options: .atomic)
 
         try setPrivatePermissions(
-            on: [
-                screenshotURL,
-                thumbnailURL,
-                accessibilityURL,
-                contextURL,
-                metadataURL,
-                windowListURL,
-                combinedAttemptURL,
-            ]
-        )
+            on: [screenshotURL, thumbnailURL, accessibilityURL, contextURL, metadataURL] + observation.diagnosticURLs)
 
         return Snapshot(
             id: id,
@@ -255,10 +122,11 @@ final class CaptureEngine {
             accessibilityURL: accessibilityURL,
             contextURL: contextURL,
             contextText: contextText,
-            accessibilityJSON: sanitizedAccessibilityJSON,
+            accessibilityJSON: accessibilityJSON,
             appName: appName,
-            windowTitle: windowTitle,
-            elementCount: integer(observationData["element_count"]) ?? 0
+            windowTitle: observation.window.title,
+            elementCount: observation.elements.count,
+            captureStrategy: observation.captureStrategy
         )
     }
 
@@ -296,34 +164,14 @@ final class CaptureEngine {
         return formatter.string(from: Date()).replacingOccurrences(of: ":", with: "-") + "-" + UUID().uuidString.lowercased()
     }
 
-    private func preferredWindow(in windows: [[String: Any]]) -> [String: Any]? {
-        let visible = windows.filter { ($0["is_on_screen"] as? Bool) != false }
-        if let keyWindow = visible.first(where: { ($0["is_key"] as? Bool) == true }) {
-            return keyWindow
-        }
-        if let frontmostWindow = visible.first(where: { ($0["is_frontmost"] as? Bool) == true }) {
-            return frontmostWindow
-        }
-        let standard = visible.filter { string($0["subrole"]) == "AXStandardWindow" }
-        return (standard.isEmpty ? visible : standard).max { windowArea($0) < windowArea($1) }
-    }
-
-    private func windowArea(_ window: [String: Any]) -> Double {
-        guard let bounds = window["bounds"] as? [String: Any] else { return 0 }
-        return double(bounds["width"]) * double(bounds["height"])
-    }
-
     private func buildContext(
         appName: String,
         bundleIdentifier: String?,
         pid: pid_t,
-        windowTitle: String,
-        windowID: Int,
-        observation: [String: Any],
+        observation: ObservationResult,
         captureDirectory: URL,
         captureStrategy: String
     ) -> String {
-        let elements = observation["ui_elements"] as? [[String: Any]] ?? []
         var lines = [
             "# AppShot context",
             "",
@@ -331,10 +179,11 @@ final class CaptureEngine {
             "Application: \(appName)",
             "Bundle ID: \(bundleIdentifier ?? "unknown")",
             "PID: \(pid)",
-            "Window: \(windowTitle)",
-            "Window ID: \(windowID)",
+            "Window: \(observation.window.title)",
+            "Window ID: \(observation.window.id)",
+            "Observation engine: \(observation.engine.displayName)",
             "Capture strategy: \(captureStrategy)",
-            "Accessibility elements: \(elements.count)",
+            "Accessibility elements: \(observation.elements.count)",
             "Capture directory: \(captureDirectory.path)",
             "",
             "The clipboard item contains this text and the matching PNG as alternative representations.",
@@ -344,28 +193,25 @@ final class CaptureEngine {
             "",
         ]
 
-        for element in elements {
+        for element in observation.elements {
             lines.append(elementLine(element))
         }
 
-        let truncation = observation["truncation"] as? [String: Any]
-        if let truncation, !truncation.isEmpty {
+        if observation.truncation.isIncomplete {
             lines.append("")
-            lines.append("Peekaboo truncation metadata: \(compactJSONString(truncation))")
+            lines.append("Accessibility truncation metadata: \(compactTruncation(observation.truncation))")
         }
         return lines.joined(separator: "\n") + "\n"
     }
 
-    private func elementLine(_ element: [String: Any]) -> String {
-        let role = cleanText(string(element["ax_role"]) ?? string(element["role"]) ?? "element", maximum: 80)
-        let secure = role.lowercased().contains("secure") || (string(element["role_description"]) ?? "").lowercased().contains("secure")
-        if secure {
+    private func elementLine(_ element: ObservedElement) -> String {
+        let role = cleanText(element.role, maximum: 80)
+        if element.isSecure {
             return "- \(role): [secure value redacted]"
         }
 
         var descriptions: [String] = []
-        for key in ["label", "title", "value", "description", "help"] {
-            guard let value = string(element[key]) else { continue }
+        for value in [element.label, element.title, element.value, element.elementDescription, element.help].compactMap({ $0 }) {
             let cleaned = cleanText(value, maximum: 320)
             guard !cleaned.isEmpty, !descriptions.contains(cleaned) else { continue }
             descriptions.append(cleaned)
@@ -373,17 +219,13 @@ final class CaptureEngine {
         let text = descriptions.isEmpty ? "unnamed" : descriptions.joined(separator: " | ")
 
         var suffix: [String] = []
-        if let bounds = element["bounds"] as? [String: Any] {
-            let x = integer(bounds["x"]) ?? 0
-            let y = integer(bounds["y"]) ?? 0
-            let width = integer(bounds["width"]) ?? 0
-            let height = integer(bounds["height"]) ?? 0
-            suffix.append("bounds=\(x),\(y),\(width),\(height)")
+        if let bounds = element.bounds {
+            suffix.append("bounds=\(Int(bounds.x)),\(Int(bounds.y)),\(Int(bounds.width)),\(Int(bounds.height))")
         }
-        if (element["is_actionable"] as? Bool) == true {
+        if element.isActionable {
             suffix.append("actionable")
         }
-        if (element["is_enabled"] as? Bool) == false {
+        if element.isEnabled == false {
             suffix.append("disabled")
         }
         let metadata = suffix.isEmpty ? "" : " [\(suffix.joined(separator: ", "))]"
@@ -401,9 +243,10 @@ final class CaptureEngine {
         return String(oneLine.prefix(maximum)) + "…"
     }
 
-    private func compactJSONString(_ value: Any) -> String {
-        guard JSONSerialization.isValidJSONObject(value),
-            let data = try? JSONSerialization.data(withJSONObject: value, options: [.sortedKeys]),
+    private func compactTruncation(_ truncation: ObservationTruncation) -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        guard let data = try? encoder.encode(truncation),
             let text = String(data: data, encoding: .utf8)
         else { return "unavailable" }
         return text
@@ -435,118 +278,10 @@ final class CaptureEngine {
         }
     }
 
-    private func sanitizedJSON(_ source: Data) throws -> Data {
-        guard var root = try JSONSerialization.jsonObject(with: source) as? [String: Any] else {
-            throw AppShotError.invalidResponse("the root JSON value is not an object")
-        }
-        if var data = root["data"] as? [String: Any],
-            let elements = data["ui_elements"] as? [[String: Any]]
-        {
-            data["ui_elements"] = elements.map { element in
-                var sanitized = element
-                let role = (string(element["ax_role"]) ?? string(element["role"]) ?? "").lowercased()
-                let roleDescription = (string(element["role_description"]) ?? "").lowercased()
-                if role.contains("secure") || roleDescription.contains("secure") {
-                    sanitized["value"] = "[secure value redacted]"
-                }
-                return sanitized
-            }
-            root["data"] = data
-        }
-        return try JSONSerialization.data(withJSONObject: root, options: [.prettyPrinted, .sortedKeys])
-    }
-
-    private func runPeekaboo(
-        arguments: [String],
-        captureDirectory: URL,
-        stdoutURL: URL,
-        stderrName: String
-    ) throws -> ProcessResult {
-        guard let executableURL = peekabooExecutableURL() else {
-            throw AppShotError.peekabooNotInstalled
-        }
-
-        try Data().write(to: stdoutURL, options: .atomic)
-        try fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: stdoutURL.path)
-        let stderrURL = captureDirectory.appendingPathComponent(stderrName)
-        try Data().write(to: stderrURL, options: .atomic)
-        try fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: stderrURL.path)
-
-        let stdoutHandle = try FileHandle(forWritingTo: stdoutURL)
-        let stderrHandle = try FileHandle(forWritingTo: stderrURL)
-        defer {
-            try? stdoutHandle.close()
-            try? stderrHandle.close()
-        }
-
-        let process = Process()
-        process.executableURL = executableURL
-        process.arguments = arguments
-        process.standardOutput = stdoutHandle
-        process.standardError = stderrHandle
-        try process.run()
-        process.waitUntilExit()
-        try stdoutHandle.synchronize()
-        try stderrHandle.synchronize()
-
-        return ProcessResult(
-            status: process.terminationStatus,
-            stdout: try Data(contentsOf: stdoutURL),
-            stderr: try Data(contentsOf: stderrURL)
-        )
-    }
-
-    private func peekabooExecutableURL() -> URL? {
-        let environmentPath = ProcessInfo.processInfo.environment["PEEKABOO_CLI_PATH"]
-        let paths = [environmentPath, "/opt/homebrew/bin/peekaboo", "/usr/local/bin/peekaboo"].compactMap { $0 }
-        return paths.first(where: { fileManager.isExecutableFile(atPath: $0) }).map(URL.init(fileURLWithPath:))
-    }
-
-    private func jsonDictionary(_ data: Data) throws -> [String: Any] {
-        guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw AppShotError.invalidResponse("the root JSON value is not an object")
-        }
-        return object
-    }
-
-    private func jsonErrorMessage(_ response: [String: Any]) -> String {
-        if let error = response["error"] as? [String: Any] {
-            return string(error["message"]) ?? compactJSONString(error)
-        }
-        return "missing success data"
-    }
-
-    private func commandError(_ command: String, result: ProcessResult) -> String {
-        let stdout = String(data: result.stdout, encoding: .utf8) ?? ""
-        let stderr = String(data: result.stderr, encoding: .utf8) ?? ""
-        let details = [stdout, stderr].filter { !$0.isEmpty }.joined(separator: "\n")
-        return "Peekaboo \(command) failed with exit \(result.status). \(cleanText(details, maximum: 1200))"
-    }
-
     private func setPrivatePermissions(on urls: [URL]) throws {
         for url in urls where fileManager.fileExists(atPath: url.path) {
             try fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
         }
-    }
-
-    private func string(_ value: Any?) -> String? {
-        if let value = value as? String { return value }
-        if let value = value as? NSNumber { return value.stringValue }
-        return nil
-    }
-
-    private func integer(_ value: Any?) -> Int? {
-        if let value = value as? Int { return value }
-        if let value = value as? NSNumber { return value.intValue }
-        if let value = value as? String { return Int(value) }
-        return nil
-    }
-
-    private func double(_ value: Any?) -> Double {
-        if let value = value as? Double { return value }
-        if let value = value as? NSNumber { return value.doubleValue }
-        if let value = value as? String { return Double(value) ?? 0 }
-        return 0
     }
 }
 
@@ -1187,6 +922,14 @@ private func clipboardMode(from arguments: [String], default defaultMode: Clipbo
     }
 }
 
+private func observationEngineKind(from arguments: [String], default defaultKind: ObservationEngineKind) throws -> ObservationEngineKind {
+    guard let value = argumentValue(after: "--engine", in: arguments) else { return defaultKind }
+    guard let kind = ObservationEngineKind(rawValue: value) else {
+        throw AppShotError.invalidArguments("Unknown observation engine: \(value)")
+    }
+    return kind
+}
+
 private func snapshot(atDirectoryPath path: String) throws -> Snapshot {
     let requestedURL = URL(fileURLWithPath: path, isDirectory: true).standardizedFileURL
     guard
@@ -1263,12 +1006,15 @@ if arguments.contains("--capture-once") {
             throw AppShotError.noTargetApplication
         }
         let mode = try clipboardMode(from: arguments, default: .imageAndFullContext)
-        let snapshot = try CaptureEngine().capture(application: target)
+        let engineKind = try observationEngineKind(from: arguments, default: CapturePreferences.observationEngineKind)
+        let snapshot = try CaptureEngine(observationEngine: engineKind.makeEngine()).capture(application: target)
         try ClipboardWriter.copy(snapshot, mode: mode)
         print("capture_directory=\(snapshot.directoryURL.path)")
         print("application=\(snapshot.appName)")
         print("window=\(snapshot.windowTitle)")
         print("elements=\(snapshot.elementCount)")
+        print("engine=\(engineKind.rawValue)")
+        print("strategy=\(snapshot.captureStrategy)")
         print("clipboard_mode=\(mode.rawValue)")
         print(ClipboardWriter.describeClipboard())
         exit(EXIT_SUCCESS)
