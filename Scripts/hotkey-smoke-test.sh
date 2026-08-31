@@ -6,13 +6,13 @@ REPO_ROOT="${SCRIPT_DIR:h}"
 INSTALLED_APP="/Applications/AppShot Clipboard POC.app"
 INSTALLED_BINARY="$INSTALLED_APP/Contents/MacOS/AppShotClipboardPOC"
 TRIGGER="$REPO_ROOT/build/trigger-hotkey"
-CAPTURE_ROOT="/tmp/AppShotClipboardPOC"
 
 if [[ ! -x "$INSTALLED_BINARY" ]]; then
   echo "Install the app first with: make install" >&2
   exit 1
 fi
 
+CAPTURE_ROOT=$("$INSTALLED_BINARY" --capture-root)
 mkdir -p "$CAPTURE_ROOT"
 
 xcrun swiftc \
@@ -24,8 +24,18 @@ xcrun swiftc \
 
 if ! pgrep -x AppShotClipboardPOC >/dev/null; then
   open -n "$INSTALLED_APP"
-  sleep 1
 fi
+
+for _ in {1..50}; do
+  if pgrep -x AppShotClipboardPOC >/dev/null; then
+    permissions=$("$INSTALLED_BINARY" --permissions-status)
+    if [[ "$permissions" == *"accessibility=true"* && "$permissions" == *"screen_recording=true"* ]]; then
+      break
+    fi
+  fi
+  sleep 0.2
+done
+sleep 1
 
 before=$(find "$CAPTURE_ROOT" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
 "$TRIGGER"

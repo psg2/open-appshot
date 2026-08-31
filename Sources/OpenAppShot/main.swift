@@ -1,9 +1,11 @@
 import AppKit
 import ApplicationServices
 import Foundation
+import ImageIO
+import UniformTypeIdentifiers
 
-private let appBundleIdentifier = "com.psg2.AppShotClipboardPOC"
-private let customContextType = NSPasteboard.PasteboardType("com.psg2.appshot-context-json")
+let appBundleIdentifier = "com.psg2.AppShotClipboardPOC"
+let customContextType = NSPasteboard.PasteboardType("com.psg2.appshot-context-json")
 
 private enum AppShotError: LocalizedError {
     case noTargetApplication
@@ -31,7 +33,9 @@ private enum AppShotError: LocalizedError {
     }
 }
 
-private struct Snapshot {
+struct Snapshot {
+    let id: String
+    let capturedAt: Date
     let directoryURL: URL
     let screenshotURL: URL
     let accessibilityURL: URL
@@ -49,15 +53,26 @@ private struct ProcessResult {
     let stderr: Data
 }
 
-private final class CaptureEngine {
+final class CaptureEngine {
     private let fileManager = FileManager.default
-    private let baseDirectory = URL(fileURLWithPath: "/tmp/AppShotClipboardPOC", isDirectory: true)
+    private let baseDirectory: URL
+    private let retentionDays: Int
+
+    init(
+        baseDirectory: URL = CapturePreferences.captureRootURL,
+        retentionDays: Int = CapturePreferences.retentionDays
+    ) {
+        self.baseDirectory = baseDirectory
+        self.retentionDays = retentionDays
+    }
 
     func capture(application: NSRunningApplication) throws -> Snapshot {
         try prepareBaseDirectory()
         try removeExpiredCaptures()
 
-        let captureDirectory = baseDirectory.appendingPathComponent(snapshotDirectoryName(), isDirectory: true)
+        let id = snapshotDirectoryName()
+        let capturedAt = Date()
+        let captureDirectory = baseDirectory.appendingPathComponent(id, isDirectory: true)
         try fileManager.createDirectory(
             at: captureDirectory,
             withIntermediateDirectories: true,
@@ -185,6 +200,8 @@ private final class CaptureEngine {
         guard fileManager.fileExists(atPath: screenshotURL.path) else {
             throw AppShotError.missingScreenshot
         }
+        let thumbnailURL = captureDirectory.appendingPathComponent("thumbnail.png")
+        try writeThumbnail(from: screenshotURL, to: thumbnailURL)
 
         let contextText = buildContext(
             appName: appName,
@@ -199,9 +216,36 @@ private final class CaptureEngine {
         let contextURL = captureDirectory.appendingPathComponent("context.md")
         try contextText.write(to: contextURL, atomically: true, encoding: .utf8)
 
-        try setPrivatePermissions(on: [screenshotURL, accessibilityURL, contextURL, windowListURL, combinedAttemptURL])
+        let metadata = CaptureMetadata(
+            id: id,
+            capturedAt: capturedAt,
+            appName: appName,
+            bundleIdentifier: application.bundleIdentifier,
+            windowTitle: windowTitle,
+            elementCount: integer(observationData["element_count"]) ?? 0,
+            captureStrategy: captureStrategy
+        )
+        let metadataURL = captureDirectory.appendingPathComponent("metadata.json")
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        try encoder.encode(metadata).write(to: metadataURL, options: .atomic)
+
+        try setPrivatePermissions(
+            on: [
+                screenshotURL,
+                thumbnailURL,
+                accessibilityURL,
+                contextURL,
+                metadataURL,
+                windowListURL,
+                combinedAttemptURL,
+            ]
+        )
 
         return Snapshot(
+            id: id,
+            capturedAt: capturedAt,
             directoryURL: captureDirectory,
             screenshotURL: screenshotURL,
             accessibilityURL: accessibilityURL,
@@ -215,16 +259,20 @@ private final class CaptureEngine {
     }
 
     private func prepareBaseDirectory() throws {
+        let alreadyExists = fileManager.fileExists(atPath: baseDirectory.path)
         try fileManager.createDirectory(
             at: baseDirectory,
             withIntermediateDirectories: true,
             attributes: [.posixPermissions: 0o700]
         )
-        try fileManager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: baseDirectory.path)
+        if !alreadyExists {
+            try fileManager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: baseDirectory.path)
+        }
     }
 
     private func removeExpiredCaptures() throws {
-        let expiration = Date().addingTimeInterval(-24 * 60 * 60)
+        guard retentionDays > 0 else { return }
+        let expiration = Date().addingTimeInterval(-Double(retentionDays) * 24 * 60 * 60)
         let urls = try fileManager.contentsOfDirectory(
             at: baseDirectory,
             includingPropertiesForKeys: [.creationDateKey, .isDirectoryKey],
@@ -361,6 +409,31 @@ private final class CaptureEngine {
         return text
     }
 
+    private func writeThumbnail(from sourceURL: URL, to destinationURL: URL) throws {
+        guard let source = CGImageSourceCreateWithURL(sourceURL as CFURL, nil) else {
+            throw AppShotError.missingScreenshot
+        }
+        let options = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: 320,
+        ] as CFDictionary
+        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options),
+              let destination = CGImageDestinationCreateWithURL(
+                  destinationURL as CFURL,
+                  UTType.png.identifier as CFString,
+                  1,
+                  nil
+              )
+        else {
+            throw AppShotError.missingScreenshot
+        }
+        CGImageDestinationAddImage(destination, image, nil)
+        guard CGImageDestinationFinalize(destination) else {
+            throw AppShotError.commandFailed("Could not write the capture thumbnail.")
+        }
+    }
+
     private func sanitizedJSON(_ source: Data) throws -> Data {
         guard var root = try JSONSerialization.jsonObject(with: source) as? [String: Any] else {
             throw AppShotError.invalidResponse("the root JSON value is not an object")
@@ -475,7 +548,7 @@ private final class CaptureEngine {
     }
 }
 
-private enum ClipboardWriter {
+enum ClipboardWriter {
     static func copyCombined(_ snapshot: Snapshot) throws {
         let imageData = try Data(contentsOf: snapshot.screenshotURL)
         let item = NSPasteboardItem()
@@ -521,7 +594,9 @@ private enum ClipboardWriter {
 }
 
 private final class AppDelegate: NSObject, NSApplicationDelegate {
-    private let captureEngine = CaptureEngine()
+    private lazy var model = AppModel()
+    private lazy var mainWindowController = MainWindowController(model: model)
+    private lazy var settingsWindowController = SettingsWindowController(model: model)
     private var statusItem: NSStatusItem!
     private var statusMenuItem: NSMenuItem!
     private var copyCombinedMenuItem: NSMenuItem!
@@ -539,11 +614,26 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
     private var rightOptionDown = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.setActivationPolicy(.accessory)
         lastExternalApplication = externalApplication(NSWorkspace.shared.frontmostApplication)
+        NSApp.setActivationPolicy(.regular)
+        model.captureAction = { [weak self] in self?.triggerCapture() }
+        model.showSettingsAction = { [weak self] in self?.showSettings() }
+        buildMainMenu()
         buildMenuBar()
         observeApplicationActivation()
         installHotkeyMonitor()
+        updatePermissionStatus()
+        restoreLatestSnapshot()
+        showMainWindow()
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        showMainWindow()
+        return true
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        guard statusMenuItem != nil else { return }
         updatePermissionStatus()
     }
 
@@ -556,7 +646,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
     private func buildMenuBar() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         setStatusIcon(symbol: "camera.viewfinder")
-        statusItem.button?.toolTip = "AppShot Clipboard POC"
+        statusItem.button?.toolTip = "Open AppShot"
 
         let menu = NSMenu()
         statusMenuItem = NSMenuItem(title: "Starting…", action: nil, keyEquivalent: "")
@@ -564,26 +654,103 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(statusMenuItem)
         menu.addItem(.separator())
 
-        menu.addItem(NSMenuItem(title: "Capture now", action: #selector(captureNow), keyEquivalent: ""))
+        menu.addItem(targetedMenuItem(title: "Open AppShot", action: #selector(showMainWindow)))
+
+        menu.addItem(targetedMenuItem(title: "Capture now", action: #selector(captureNow)))
         menu.addItem(NSMenuItem(title: "Hotkey: Left Option + Right Option", action: nil, keyEquivalent: ""))
         menu.items.last?.isEnabled = false
         menu.addItem(.separator())
 
-        copyCombinedMenuItem = NSMenuItem(title: "Copy combined clipboard", action: #selector(copyCombined), keyEquivalent: "")
-        copyScreenshotMenuItem = NSMenuItem(title: "Copy screenshot only", action: #selector(copyScreenshot), keyEquivalent: "")
-        copyContextMenuItem = NSMenuItem(title: "Copy Accessibility text only", action: #selector(copyContext), keyEquivalent: "")
-        revealMenuItem = NSMenuItem(title: "Reveal last capture", action: #selector(revealLastCapture), keyEquivalent: "")
+        copyCombinedMenuItem = targetedMenuItem(title: "Copy combined clipboard", action: #selector(copyCombined))
+        copyScreenshotMenuItem = targetedMenuItem(title: "Copy screenshot only", action: #selector(copyScreenshot))
+        copyContextMenuItem = targetedMenuItem(title: "Copy Accessibility text only", action: #selector(copyContext))
+        revealMenuItem = targetedMenuItem(title: "Reveal last capture", action: #selector(revealLastCapture))
         for item in [copyCombinedMenuItem, copyScreenshotMenuItem, copyContextMenuItem, revealMenuItem] {
             item?.isEnabled = false
             if let item { menu.addItem(item) }
         }
 
         menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Request missing permissions", action: #selector(requestMissingPermissions), keyEquivalent: ""))
-        menu.addItem(NSMenuItem(title: "Open Accessibility settings", action: #selector(openAccessibilitySettings), keyEquivalent: ""))
-        menu.addItem(NSMenuItem(title: "Open Screen Recording settings", action: #selector(openScreenRecordingSettings), keyEquivalent: ""))
-        menu.addItem(NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q"))
+        menu.addItem(targetedMenuItem(title: "Request missing permissions", action: #selector(requestMissingPermissions)))
+        menu.addItem(targetedMenuItem(title: "Open Accessibility settings", action: #selector(openAccessibilitySettings)))
+        menu.addItem(targetedMenuItem(title: "Open Screen Recording settings", action: #selector(openScreenRecordingSettings)))
+        menu.addItem(targetedMenuItem(title: "Settings…", action: #selector(showSettings), keyEquivalent: ","))
+        menu.addItem(targetedMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q"))
         statusItem.menu = menu
+    }
+
+    private func buildMainMenu() {
+        let mainMenu = NSMenu()
+
+        let applicationItem = NSMenuItem()
+        let applicationMenu = NSMenu()
+        applicationMenu.addItem(
+            withTitle: "About Open AppShot",
+            action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
+            keyEquivalent: ""
+        ).target = NSApp
+        applicationMenu.addItem(.separator())
+        applicationMenu.addItem(targetedMenuItem(title: "Settings…", action: #selector(showSettings), keyEquivalent: ","))
+        applicationMenu.addItem(.separator())
+        applicationMenu.addItem(
+            withTitle: "Hide Open AppShot",
+            action: #selector(NSApplication.hide(_:)),
+            keyEquivalent: "h"
+        ).target = NSApp
+        applicationMenu.addItem(
+            withTitle: "Quit Open AppShot",
+            action: #selector(NSApplication.terminate(_:)),
+            keyEquivalent: "q"
+        ).target = NSApp
+        applicationItem.submenu = applicationMenu
+        mainMenu.addItem(applicationItem)
+
+        let captureItem = NSMenuItem()
+        let captureMenu = NSMenu(title: "Capture")
+        let captureNowItem = targetedMenuItem(title: "Capture Last Active Window", action: #selector(captureNow), keyEquivalent: "c")
+        captureNowItem.keyEquivalentModifierMask = [.command, .shift]
+        captureMenu.addItem(captureNowItem)
+        captureMenu.addItem(.separator())
+        captureMenu.addItem(targetedMenuItem(title: "Copy Screenshot and Context", action: #selector(copyCombined)))
+        captureMenu.addItem(targetedMenuItem(title: "Copy Screenshot", action: #selector(copyScreenshot)))
+        captureMenu.addItem(targetedMenuItem(title: "Copy Accessibility Context", action: #selector(copyContext)))
+        captureMenu.addItem(targetedMenuItem(title: "Reveal Last Capture", action: #selector(revealLastCapture)))
+        captureItem.submenu = captureMenu
+        mainMenu.addItem(captureItem)
+
+        let editItem = NSMenuItem()
+        let editMenu = NSMenu(title: "Edit")
+        editMenu.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        editMenu.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        editItem.submenu = editMenu
+        mainMenu.addItem(editItem)
+
+        let windowItem = NSMenuItem()
+        let windowMenu = NSMenu(title: "Window")
+        windowMenu.addItem(
+            withTitle: "Minimize",
+            action: #selector(NSWindow.performMiniaturize(_:)),
+            keyEquivalent: "m"
+        )
+        windowMenu.addItem(
+            withTitle: "Bring All to Front",
+            action: #selector(NSApplication.arrangeInFront(_:)),
+            keyEquivalent: ""
+        ).target = NSApp
+        windowItem.submenu = windowMenu
+        mainMenu.addItem(windowItem)
+        NSApp.windowsMenu = windowMenu
+        NSApp.mainMenu = mainMenu
+    }
+
+    private func targetedMenuItem(
+        title: String,
+        action: Selector,
+        keyEquivalent: String = ""
+    ) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: action, keyEquivalent: keyEquivalent)
+        item.target = self
+        return item
     }
 
     private func observeApplicationActivation() {
@@ -657,22 +824,32 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         captureInProgress = true
+        model.captureStarted(appName: target.localizedName ?? "application")
         statusMenuItem.title = "Capturing \(target.localizedName ?? "application")…"
         setStatusIcon(symbol: "camera.aperture")
+        let captureEngine = CaptureEngine(
+            baseDirectory: CapturePreferences.captureRootURL,
+            retentionDays: CapturePreferences.retentionDays
+        )
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self else { return }
             do {
-                let snapshot = try self.captureEngine.capture(application: target)
+                let snapshot = try captureEngine.capture(application: target)
                 DispatchQueue.main.async {
                     do {
-                        try ClipboardWriter.copyCombined(snapshot)
+                        if CapturePreferences.copyAfterCapture {
+                            try ClipboardWriter.copyCombined(snapshot)
+                        }
                         self.lastSnapshot = snapshot
                         self.captureInProgress = false
                         self.enableSnapshotActions()
-                        self.statusMenuItem.title = "Copied \(snapshot.appName), \(snapshot.elementCount) AX elements"
+                        self.model.captureCompleted(snapshot)
+                        self.statusMenuItem.title = CapturePreferences.copyAfterCapture
+                            ? "Copied \(snapshot.appName), \(snapshot.elementCount) AX elements"
+                            : "Captured \(snapshot.appName), \(snapshot.elementCount) AX elements"
                         self.setStatusIcon(symbol: "checkmark.circle.fill")
-                        NSSound(named: "Glass")?.play()
+                        if CapturePreferences.playCaptureSound { NSSound(named: "Glass")?.play() }
                         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                             self.setStatusIcon(symbol: "camera.viewfinder")
                         }
@@ -729,24 +906,30 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func requestMissingPermissions() {
-        if !AXIsProcessTrusted() {
-            let promptKey = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
-            _ = AXIsProcessTrustedWithOptions([promptKey: true] as CFDictionary)
-        }
-        if !CGPreflightScreenCaptureAccess() {
-            _ = CGRequestScreenCaptureAccess()
-        }
+        model.requestMissingPermissions()
         updatePermissionStatus()
     }
 
     @objc private func openAccessibilitySettings() {
-        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
-        NSWorkspace.shared.open(url)
+        model.openAccessibilitySettings()
     }
 
     @objc private func openScreenRecordingSettings() {
-        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!
-        NSWorkspace.shared.open(url)
+        model.openScreenRecordingSettings()
+    }
+
+    @objc private func showMainWindow() {
+        mainWindowController.showWindow(nil)
+        mainWindowController.window?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        model.refreshPermissions()
+    }
+
+    @objc private func showSettings() {
+        settingsWindowController.showWindow(nil)
+        settingsWindowController.window?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        model.refreshPermissions()
     }
 
     @objc private func quit() {
@@ -754,6 +937,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func updatePermissionStatus() {
+        model.refreshPermissions()
         let accessibility = AXIsProcessTrusted()
         let screenRecording = CGPreflightScreenCaptureAccess()
         if accessibility && screenRecording {
@@ -776,8 +960,15 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showFailure(_ message: String) {
         statusMenuItem.title = message
+        model.captureFailed(message)
         setStatusIcon(symbol: "exclamationmark.triangle.fill")
         NSSound.beep()
+    }
+
+    private func restoreLatestSnapshot() {
+        guard let record = model.captures.first, let snapshot = try? record.snapshot() else { return }
+        lastSnapshot = snapshot
+        enableSnapshotActions()
     }
 
     private func setStatusIcon(symbol: String) {
@@ -815,6 +1006,16 @@ if arguments.contains("--permissions-status") {
 
 if arguments.contains("--inspect-clipboard") {
     print(ClipboardWriter.describeClipboard())
+    exit(EXIT_SUCCESS)
+}
+
+if arguments.contains("--capture-root") {
+    print(CapturePreferences.captureRootURL.path)
+    exit(EXIT_SUCCESS)
+}
+
+if arguments.contains("--history-count") {
+    print(CaptureHistory.load().count)
     exit(EXIT_SUCCESS)
 }
 

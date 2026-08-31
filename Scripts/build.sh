@@ -14,7 +14,10 @@ xcrun swiftc \
   -warnings-as-errors \
   -framework AppKit \
   -framework ApplicationServices \
-  "$REPO_ROOT/Sources/OpenAppShot/main.swift" \
+  -framework ImageIO \
+  -framework SwiftUI \
+  -framework UniformTypeIdentifiers \
+  "$REPO_ROOT/Sources/OpenAppShot/"*.swift \
   -o "$APP_PATH/Contents/MacOS/AppShotClipboardPOC"
 
 cp "$REPO_ROOT/Resources/Info.plist" "$APP_PATH/Contents/Info.plist"

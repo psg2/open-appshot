@@ -2,50 +2,82 @@
 
 ## Scope
 
-Open AppShot observes the frontmost macOS window after a user gesture. Version 0.1.1 cannot act on the captured UI.
+Open AppShot 0.2.0 observes the last active macOS window after a user gesture. It stores and displays the resulting pixels and Accessibility context. It cannot act on the captured UI.
+
+## App structure
+
+```text
+AppKit lifecycle and global hotkey
+  -> AppModel observable state
+  -> SwiftUI NavigationSplitView and Settings window
+
+CaptureEngine
+  -> local Peekaboo process
+  -> private capture bundle
+  -> capture history
+  -> multipart NSPasteboard item
+```
+
+`main.swift` retains the AppKit lifecycle because it owns the status item, main menu, global modifier monitor, command-line smoke-test entry points, and background capture process. `AppModel.swift` owns user-visible state and preferences. `Views.swift` renders the main and Settings windows with SwiftUI.
 
 ## Capture path
 
 ```text
-Left Option + Right Option
-  -> frontmost NSRunningApplication
+Left Option + Right Option or Capture
+  -> last external NSRunningApplication
   -> Peekaboo local window inventory
   -> exact-window screenshot and Accessibility observation
   -> split screenshot and AX fallback when combined observation fails
   -> secure-field redaction
-  -> local capture bundle
-  -> multipart NSPasteboard item
+  -> metadata and local capture bundle
+  -> history refresh
+  -> multipart NSPasteboard item when auto-copy is enabled
 ```
 
-Peekaboo commands always use `--no-remote`. Pixel capture also selects `--capture-engine cg`. This avoids permission drift in an on-demand Peekaboo daemon and keeps TCC responsibility with the menu-bar app.
+Peekaboo commands always use `--no-remote`. Pixel capture also selects `--capture-engine cg`. TCC responsibility stays with Open AppShot instead of moving to an on-demand Peekaboo daemon.
 
-## Capture bundle
+## Capture storage
 
-Each capture lives under `/tmp/AppShotClipboardPOC/<capture-id>/` for at most 24 hours. The bundle contains:
+The default root is `~/Library/Application Support/Open AppShot/Captures`. The user can choose another folder in Settings. Retention runs before each capture and supports 1, 7, 30, or 90 days, or no automatic deletion.
+
+Each capture directory contains:
 
 - `screenshot.png`
+- `thumbnail.png`
 - `accessibility.json`
 - `context.md`
+- `metadata.json`
 - window inventory and diagnostic output
 
-The directory uses mode `0700`; files use `0600`.
+The directory uses mode `0700`; files use `0600`. `metadata.json` is the stable history index. A 320-pixel thumbnail keeps the history sidebar from decoding every full screenshot on launch. The history loader can derive enough metadata from older `context.md` files to display POC captures under `/tmp/AppShotClipboardPOC` without modifying them.
+
+## UI state
+
+`AppModel` scans the configured capture root, the default root when a custom destination is active, and the legacy POC root. It keeps the current selection, permission status, capture progress, storage location, retention, sound, and clipboard preferences. A completed hotkey capture refreshes history and selects the new record.
+
+The native UI has four visible boundaries:
+
+- the history sidebar with local thumbnails;
+- the screenshot and Accessibility previews;
+- the context rail with pixel, AX, and storage facts;
+- Settings for permissions, capture behavior, retention, and destination.
 
 ## Clipboard boundary
 
-The same pasteboard item advertises PNG, UTF-8 text, and sanitized JSON. A receiving chat may select only one representation. The menu-bar app keeps the last capture available for separate image and text copies.
+The same pasteboard item advertises PNG, UTF-8 text, and sanitized JSON. A receiving chat may select only one representation. The history actions can copy the image or context separately without recapturing the window.
 
 ## Permissions and signing
 
-The app needs Accessibility for the two-Option global monitor and AX inspection. It needs Screen Recording for pixels.
+Accessibility permission covers the two-Option global monitor and AX inspection. Screen Recording permission covers pixels. The main window and Settings show both states and link to the corresponding System Settings panes.
 
-Local builds are ad hoc signed with an identifier-only designated requirement. That requirement stays stable across rebuilds but does not provide production-grade code identity. Public distribution requires Developer ID signing and notarization.
+Local builds are ad hoc signed with an identifier-only designated requirement. The requirement stays stable across rebuilds but does not provide production-grade identity. Public distribution requires Developer ID signing and notarization.
 
 ## Decisions still open
 
-- Final product name, bundle ID, and migration of existing TCC permissions
+- Final `.app` filename and migration of the installed prototype
 - Developer ID ownership and release signing
 - License
-- Supported macOS and Peekaboo version range
+- Supported Peekaboo version range
 - Clipboard behavior in each target chat client
-- Per-app deny rules and visible redaction policy
+- Per-app deny rules and visible screenshot redaction
 - Whether to depend on Peekaboo or extract a smaller observation-only component
