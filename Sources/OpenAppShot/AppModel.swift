@@ -17,6 +17,7 @@ struct CaptureRecord: Identifiable, Hashable {
     let metadata: CaptureMetadata
     let directoryURL: URL
     let isLegacy: Bool
+    let canDelete: Bool
 
     var id: String { metadata.id }
     var screenshotURL: URL { directoryURL.appendingPathComponent("screenshot.png") }
@@ -26,6 +27,10 @@ struct CaptureRecord: Identifiable, Hashable {
     }
     var accessibilityURL: URL { directoryURL.appendingPathComponent("accessibility.json") }
     var contextURL: URL { directoryURL.appendingPathComponent("context.md") }
+    var hasVerifiedOwnership: Bool {
+        CaptureStorage.hasOwnershipMarker(directoryURL)
+            || CaptureStorage.hasVerifiedLegacyLayout(directoryURL)
+    }
 
     func snapshot() throws -> Snapshot {
         Snapshot(
@@ -87,8 +92,7 @@ struct CaptureHotkey: Codable, Equatable {
 
     static func keyboard(event: NSEvent) -> CaptureHotkey? {
         let modifiers = event.modifierFlags.intersection(supportedModifiers)
-        let requiredModifiers = modifiers.intersection([.command, .option, .control])
-        guard !requiredModifiers.isEmpty else { return nil }
+        guard isAllowedModifierCombination(modifiers) else { return nil }
 
         return CaptureHotkey(
             kind: .keyboard,
@@ -113,6 +117,19 @@ struct CaptureHotkey: Codable, Equatable {
         default:
             return false
         }
+    }
+
+    static func isAllowed(_ hotkey: CaptureHotkey) -> Bool {
+        hotkey.kind == .dualOption
+            || (hotkey.kind == .keyboard && hotkey.keyCode != nil
+                && isAllowedModifierCombination(hotkey.modifiers) && !isReserved(hotkey))
+    }
+
+    private static func isAllowedModifierCombination(_ modifiers: NSEvent.ModifierFlags) -> Bool {
+        let flags: [NSEvent.ModifierFlags] = [.command, .option, .control, .shift]
+        let modifierCount = flags.filter { modifiers.contains($0) }.count
+        let includesPrimaryModifier = !modifiers.intersection([.command, .option, .control]).isEmpty
+        return modifierCount >= 2 && includesPrimaryModifier
     }
 
     private var modifierSymbols: String {
@@ -216,6 +233,8 @@ enum ClipboardMode: String, CaseIterable, Identifiable {
 enum CapturePreferences {
     private static let defaults = UserDefaults.standard
     private static let captureDirectoryKey = "captureDirectoryPath"
+    private static let storageContainerKey = "captureStorageContainerPath"
+    private static let knownCaptureRootsKey = "knownCaptureRootPaths"
     private static let retentionDaysKey = "captureRetentionDays"
     private static let copyAfterCaptureKey = "copyAfterCapture"
     private static let legacyPlaySoundKey = "playCaptureSound"
@@ -237,21 +256,56 @@ enum CapturePreferences {
     }
 
     static var captureRootURL: URL {
-        guard let path = defaults.string(forKey: captureDirectoryKey), !path.isEmpty else {
+        guard let path = defaults.string(forKey: storageContainerKey), !path.isEmpty else {
             return defaultCaptureRootURL
         }
         return URL(fileURLWithPath: path, isDirectory: true)
+            .appendingPathComponent("Open AppShot", isDirectory: true)
+            .appendingPathComponent("Captures", isDirectory: true)
     }
 
-    static var captureDirectoryPath: String? {
-        get { defaults.string(forKey: captureDirectoryKey) }
-        set {
-            if let newValue, !newValue.isEmpty {
-                defaults.set(newValue, forKey: captureDirectoryKey)
-            } else {
-                defaults.removeObject(forKey: captureDirectoryKey)
-            }
+    static var storageContainerPath: String? {
+        defaults.string(forKey: storageContainerKey)
+    }
+
+    static var knownCaptureRootURLs: [URL] {
+        let stored = defaults.stringArray(forKey: knownCaptureRootsKey) ?? []
+        return uniqueURLs(
+            stored.map { URL(fileURLWithPath: $0, isDirectory: true) }
+                + [defaultCaptureRootURL, captureRootURL]
+        )
+    }
+
+    static func selectStorageContainer(_ path: String?) {
+        rememberCaptureRoot(captureRootURL)
+        if let path, !path.isEmpty {
+            defaults.set(path, forKey: storageContainerKey)
+        } else {
+            defaults.removeObject(forKey: storageContainerKey)
         }
+        rememberCaptureRoot(captureRootURL)
+    }
+
+    static var storageContainerURL: URL? {
+        storageContainerPath.map { URL(fileURLWithPath: $0, isDirectory: true) }
+    }
+
+    static var legacyCustomCaptureRootURL: URL? {
+        guard let path = defaults.string(forKey: captureDirectoryKey), !path.isEmpty else { return nil }
+        return URL(fileURLWithPath: path, isDirectory: true)
+    }
+
+    private static func rememberCaptureRoot(_ root: URL) {
+        let paths = uniqueURLs(
+            (defaults.stringArray(forKey: knownCaptureRootsKey) ?? [])
+                .map { URL(fileURLWithPath: $0, isDirectory: true) } + [root]
+        ).map(\.path)
+        defaults.set(paths, forKey: knownCaptureRootsKey)
+    }
+
+    private static func uniqueURLs(_ urls: [URL]) -> [URL] {
+        var seen: Set<String> = []
+        return urls.filter { seen.insert($0.standardizedFileURL.path).inserted }
     }
 
     static var retentionDays: Int {
@@ -287,7 +341,7 @@ enum CapturePreferences {
         get {
             guard let data = defaults.data(forKey: captureHotkeyKey),
                 let hotkey = try? JSONDecoder().decode(CaptureHotkey.self, from: data),
-                !CaptureHotkey.isReserved(hotkey)
+                CaptureHotkey.isAllowed(hotkey)
             else { return .dualOption }
             return hotkey
         }
@@ -319,14 +373,15 @@ enum CapturePreferences {
 
 enum CaptureHistory {
     static func load() -> [CaptureRecord] {
-        var roots = [(CapturePreferences.captureRootURL, false)]
-        let defaultRoot = CapturePreferences.defaultCaptureRootURL
-        if defaultRoot.standardizedFileURL != CapturePreferences.captureRootURL.standardizedFileURL {
-            roots.append((defaultRoot, false))
-        }
+        var roots = CapturePreferences.knownCaptureRootURLs.map { ($0, false) }
         let legacy = CapturePreferences.legacyCaptureRootURL
         if !roots.contains(where: { $0.0.standardizedFileURL == legacy.standardizedFileURL }) {
             roots.append((legacy, true))
+        }
+        if let legacyCustom = CapturePreferences.legacyCustomCaptureRootURL,
+            !roots.contains(where: { $0.0.standardizedFileURL == legacyCustom.standardizedFileURL })
+        {
+            roots.append((legacyCustom, true))
         }
 
         return
@@ -345,28 +400,45 @@ enum CaptureHistory {
         else { return [] }
 
         return directories.compactMap { directory in
-            guard (try? directory.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true,
+            guard
+                let values = try? directory.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey]),
+                values.isDirectory == true,
+                values.isSymbolicLink != true,
                 FileManager.default.fileExists(atPath: directory.appendingPathComponent("screenshot.png").path),
                 FileManager.default.fileExists(atPath: directory.appendingPathComponent("context.md").path)
             else { return nil }
 
+            let hasMarker = CaptureStorage.hasOwnershipMarker(directory)
+            let hasVerifiedLegacyLayout = CaptureStorage.hasVerifiedLegacyLayout(directory)
+
             let metadataURL = directory.appendingPathComponent("metadata.json")
-            if let data = try? Data(contentsOf: metadataURL) {
+            if hasMarker || hasVerifiedLegacyLayout, let data = try? Data(contentsOf: metadataURL) {
                 let decoder = JSONDecoder()
                 decoder.dateDecodingStrategy = .iso8601
-                if let metadata = try? decoder.decode(CaptureMetadata.self, from: data) {
-                    return CaptureRecord(metadata: metadata, directoryURL: directory, isLegacy: isLegacy)
+                if let metadata = try? decoder.decode(CaptureMetadata.self, from: data),
+                    metadata.id == directory.lastPathComponent
+                {
+                    return CaptureRecord(
+                        metadata: metadata,
+                        directoryURL: directory,
+                        isLegacy: isLegacy || !hasMarker,
+                        canDelete: true
+                    )
                 }
             }
 
-            guard let metadata = legacyMetadata(directory: directory) else { return nil }
-            return CaptureRecord(metadata: metadata, directoryURL: directory, isLegacy: isLegacy)
+            guard isLegacy, let metadata = legacyMetadata(directory: directory) else { return nil }
+            return CaptureRecord(metadata: metadata, directoryURL: directory, isLegacy: true, canDelete: false)
         }
     }
 
     private static func legacyMetadata(directory: URL) -> CaptureMetadata? {
         let contextURL = directory.appendingPathComponent("context.md")
-        guard let context = try? String(contentsOf: contextURL, encoding: .utf8) else { return nil }
+        guard CaptureStorage.isCaptureDirectoryName(directory.lastPathComponent),
+            let context = try? String(contentsOf: contextURL, encoding: .utf8),
+            context.hasPrefix("# AppShot context\n"),
+            FileManager.default.fileExists(atPath: directory.appendingPathComponent("accessibility.json").path)
+        else { return nil }
 
         let capturedAt =
             value(after: "Captured:", in: context)
@@ -437,6 +509,7 @@ final class AppModel: ObservableObject {
     var showSettingsAction: (() -> Void)?
     var hotkeyChangedAction: (() -> Void)?
     var clipboardModeChangedAction: (() -> Void)?
+    var historyChangedAction: (() -> Void)?
 
     init() {
         reloadHistory()
@@ -459,6 +532,7 @@ final class AppModel: ObservableObject {
         } else {
             selectedCaptureID = captures.first?.id
         }
+        historyChangedAction?()
     }
 
     func refreshPermissions() {
@@ -537,6 +611,10 @@ final class AppModel: ObservableObject {
     }
 
     func requestDeletion(_ record: CaptureRecord) {
+        guard record.canDelete else {
+            statusMessage = "This unverified legacy capture is read-only"
+            return
+        }
         if confirmBeforeDeleting {
             deletionCandidate = record
         } else {
@@ -555,6 +633,10 @@ final class AppModel: ObservableObject {
     }
 
     func delete(_ record: CaptureRecord) {
+        guard record.canDelete, record.hasVerifiedOwnership else {
+            statusMessage = "This unverified legacy capture is read-only"
+            return
+        }
         do {
             try FileManager.default.removeItem(at: record.directoryURL)
             statusMessage = "Capture deleted"
@@ -572,16 +654,16 @@ final class AppModel: ObservableObject {
         panel.canChooseFiles = false
         panel.canCreateDirectories = true
         panel.allowsMultipleSelection = false
-        panel.directoryURL = storageURL
+        panel.directoryURL = CapturePreferences.storageContainerURL ?? storageURL
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
-        CapturePreferences.captureDirectoryPath = url.path
+        CapturePreferences.selectStorageContainer(url.path)
         storageURL = CapturePreferences.captureRootURL
         reloadHistory()
     }
 
     func useDefaultStorageDirectory() {
-        CapturePreferences.captureDirectoryPath = nil
+        CapturePreferences.selectStorageContainer(nil)
         storageURL = CapturePreferences.captureRootURL
         reloadHistory()
     }

@@ -21,21 +21,32 @@ final class NativeObservationEngine {
                 && $0.frame.width >= 50
                 && $0.frame.height >= 50
         }
-        guard let window = preferredWindow(in: candidates, accessibilityWindows: accessibilityWindows) else {
-            throw ObservationEngineError.noWindow(appName)
-        }
+        let window = try preferredWindow(
+            in: candidates,
+            accessibilityWindows: accessibilityWindows,
+            appName: appName
+        )
 
         let screenshotURL = captureDirectory.appendingPathComponent("screenshot.png")
         let image = try capture(window: window)
         try writePNG(image, to: screenshotURL)
 
         let selectedAXWindow = preferredAccessibilityWindow(for: window, in: accessibilityWindows)
-        let root = selectedAXWindow?.element ?? AXUIElementCreateApplication(application.processIdentifier)
-        let collector = NativeAXTreeCollector()
-        let collection = collector.collect(from: root)
+        let collection: NativeAXCollection
+        if let selectedAXWindow {
+            collection = NativeAXTreeCollector().collect(from: selectedAXWindow.element)
+        } else {
+            collection = NativeAXCollection(
+                elements: [],
+                truncation: ObservationTruncation(
+                    incompleteAccessibilityRead: true,
+                    reason: "No Accessibility window confidently matched the captured ScreenCaptureKit window."
+                )
+            )
+        }
 
         let inventoryURL = captureDirectory.appendingPathComponent("windows.json")
-        try writeInventory(candidates: candidates, selected: window, to: inventoryURL)
+        try writeInventory(candidateCount: candidates.count, selected: window, to: inventoryURL)
 
         return ObservationResult(
             window: ObservedWindow(
@@ -103,39 +114,84 @@ final class NativeObservationEngine {
         return image
     }
 
-    private func preferredWindow(in windows: [SCWindow], accessibilityWindows: [AXWindowDescriptor]) -> SCWindow? {
-        let focused = accessibilityWindows.first(where: \.isFocused)
-        return windows.max { lhs, rhs in
-            windowScore(lhs, focused: focused) < windowScore(rhs, focused: focused)
-        }
-    }
+    private func preferredWindow(
+        in windows: [SCWindow],
+        accessibilityWindows: [AXWindowDescriptor],
+        appName: String
+    ) throws -> SCWindow {
+        guard !windows.isEmpty else { throw ObservationEngineError.noWindow(appName) }
+        if windows.count == 1 { return windows[0] }
 
-    private func windowScore(_ window: SCWindow, focused: AXWindowDescriptor?) -> Double {
-        var score = window.isActive ? 10_000.0 : 0
+        let focused = accessibilityWindows.first(where: \.isFocused)
         if let focused {
-            if let title = window.title, !title.isEmpty, title == focused.title {
-                score += 5_000
+            let ranked =
+                windows
+                .map { ($0, screenWindowConfidence($0, accessibilityWindow: focused)) }
+                .filter(\.1.isQualified)
+                .sorted { $0.1.score > $1.1.score }
+            if let best = ranked.first, isUnambiguous(best: best.1, second: ranked.dropFirst().first?.1) {
+                return best.0
             }
-            score += rectangleSimilarity(window.frame, focused.bounds) * 2_000
         }
-        if window.title?.isEmpty == false { score += 100 }
-        score += min(window.frame.width * window.frame.height / 10_000, 500)
-        return score
+
+        let active = windows.filter(\.isActive)
+        guard active.count == 1 else { throw ObservationEngineError.ambiguousWindow(appName) }
+        return active[0]
     }
 
     private func preferredAccessibilityWindow(for window: SCWindow, in windows: [AXWindowDescriptor]) -> AXWindowDescriptor? {
-        windows.max { lhs, rhs in
-            accessibilityWindowScore(lhs, screenWindow: window) < accessibilityWindowScore(rhs, screenWindow: window)
-        }
+        let ranked =
+            windows
+            .map { ($0, accessibilityWindowConfidence($0, screenWindow: window)) }
+            .filter(\.1.isQualified)
+            .sorted { $0.1.score > $1.1.score }
+        guard let best = ranked.first,
+            isUnambiguous(best: best.1, second: ranked.dropFirst().first?.1)
+        else { return nil }
+        return best.0
     }
 
-    private func accessibilityWindowScore(_ descriptor: AXWindowDescriptor, screenWindow: SCWindow) -> Double {
-        var score = descriptor.isFocused ? 1_000.0 : 0
-        if let title = screenWindow.title, !title.isEmpty, descriptor.title == title {
-            score += 5_000
-        }
-        score += rectangleSimilarity(descriptor.bounds, screenWindow.frame) * 2_000
-        return score
+    private func screenWindowConfidence(
+        _ window: SCWindow,
+        accessibilityWindow: AXWindowDescriptor
+    ) -> WindowMatchConfidence {
+        windowMatchConfidence(
+            screenTitle: window.title,
+            screenBounds: window.frame,
+            accessibilityWindow: accessibilityWindow
+        )
+    }
+
+    private func accessibilityWindowConfidence(
+        _ descriptor: AXWindowDescriptor,
+        screenWindow: SCWindow
+    ) -> WindowMatchConfidence {
+        windowMatchConfidence(
+            screenTitle: screenWindow.title,
+            screenBounds: screenWindow.frame,
+            accessibilityWindow: descriptor
+        )
+    }
+
+    private func windowMatchConfidence(
+        screenTitle: String?,
+        screenBounds: CGRect,
+        accessibilityWindow: AXWindowDescriptor
+    ) -> WindowMatchConfidence {
+        let geometry = rectangleSimilarity(screenBounds, accessibilityWindow.bounds)
+        let titleMatches = screenTitle?.nonEmpty.map { accessibilityWindow.title == $0 } ?? false
+        let isQualified = geometry >= 0.80 || (titleMatches && geometry >= 0.50)
+        let score = geometry + (titleMatches ? 1.0 : 0) + (accessibilityWindow.isFocused ? 0.25 : 0)
+        return WindowMatchConfidence(score: score, isQualified: isQualified)
+    }
+
+    private func isUnambiguous(
+        best: WindowMatchConfidence,
+        second: WindowMatchConfidence?
+    ) -> Bool {
+        guard best.isQualified else { return false }
+        guard let second else { return true }
+        return best.score - second.score >= 0.15
     }
 
     private func rectangleSimilarity(_ lhs: CGRect, _ rhs: CGRect) -> Double {
@@ -157,24 +213,28 @@ final class NativeObservationEngine {
         }
     }
 
-    private func writeInventory(candidates: [SCWindow], selected: SCWindow, to url: URL) throws {
+    private func writeInventory(candidateCount: Int, selected: SCWindow, to url: URL) throws {
         let inventory = NativeWindowInventory(
             engine: "native",
             selectedWindowID: Int(selected.windowID),
-            windows: candidates.map {
-                NativeWindowInventory.Item(
-                    id: Int($0.windowID),
-                    title: $0.title,
-                    bounds: ObservedBounds($0.frame),
-                    isActive: $0.isActive,
-                    isOnScreen: $0.isOnScreen
-                )
-            }
+            candidateWindowCount: candidateCount,
+            selectedWindow: NativeWindowInventory.Item(
+                id: Int(selected.windowID),
+                title: selected.title,
+                bounds: ObservedBounds(selected.frame),
+                isActive: selected.isActive,
+                isOnScreen: selected.isOnScreen
+            )
         )
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try encoder.encode(inventory).write(to: url, options: .atomic)
     }
+}
+
+private struct WindowMatchConfidence {
+    let score: Double
+    let isQualified: Bool
 }
 
 private final class CallbackResultBox<Value>: @unchecked Sendable {
@@ -200,7 +260,8 @@ private final class CallbackResultBox<Value>: @unchecked Sendable {
 private struct NativeWindowInventory: Codable {
     let engine: String
     let selectedWindowID: Int
-    let windows: [Item]
+    let candidateWindowCount: Int
+    let selectedWindow: Item
 
     struct Item: Codable {
         let id: Int

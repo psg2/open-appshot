@@ -2,7 +2,7 @@
 
 ## Scope
 
-Open AppShot 0.4.0 observes the last active macOS window after a user gesture. It stores and displays the resulting pixels and Accessibility context. It cannot act on the captured UI.
+Open AppShot 0.5.0 observes the last active macOS window after a user gesture. It stores and displays the resulting pixels and Accessibility context. It cannot act on the captured UI.
 
 ## App structure
 
@@ -39,7 +39,7 @@ The native capture uses public ScreenCaptureKit and Accessibility APIs directly.
 
 ## Capture storage
 
-The default root is `~/Library/Application Support/Open AppShot/Captures`. The user can choose another folder in Settings. Retention runs before each capture and supports 1, 7, 30, or 90 days, or no automatic deletion.
+The default root is `~/Library/Application Support/Open AppShot/Captures`. A custom destination always receives an app-owned `Open AppShot/Captures` child rather than becoming a capture root itself. The preferences registry retains every 0.5-or-later root selected by the user. History and retention include all registered roots. Retention runs before each capture and supports 1, 7, 30, or 90 days, or no automatic deletion. It prunes only direct children with a valid ownership marker or a strict legacy capture layout; unrelated directories and symbolic links are ignored.
 
 Each capture directory contains:
 
@@ -48,9 +48,10 @@ Each capture directory contains:
 - `accessibility.json`
 - `context.md`
 - `metadata.json`
-- window inventory and diagnostic output
+- `.open-appshot-capture` ownership marker
+- selected-window diagnostic output
 
-The directory uses mode `0700`; files use `0600`. `metadata.json` is the stable history index. A 320-pixel thumbnail keeps the history sidebar from decoding every full screenshot on launch. The history loader can derive enough metadata from older `context.md` files to display POC captures under `/tmp/AppShotClipboardPOC` without modifying them.
+The directory uses mode `0700`; files use `0600`. `metadata.json` is the stable history index. A 320-pixel thumbnail keeps the history sidebar from decoding every full screenshot on launch. New captures are assembled under a hidden staging directory and atomically renamed only after all files and permissions are complete. A later capture removes app-marked staging directories left by a crash after one hour, even when history retention is disabled. The history loader requires an ownership marker or a strict AppShot directory name, metadata ID, context header, screenshot, and AX JSON before it permits deletion. Recognized metadata-less POC captures are read-only. Arbitrary legacy custom roots never receive automatic retention cleanup.
 
 ## UI state
 
@@ -73,14 +74,16 @@ Accessibility permission covers the global keyboard monitor and AX inspection. S
 
 The app uses the accessory activation policy and `LSUIElement` so it appears in the menu bar without a permanent Dock icon. Closing a window does not release its controller or terminate the process, which keeps the status item and hotkey available.
 
-Local builds install as `/Applications/Open AppShot.app` with the `OpenAppShot` executable. The legacy `com.psg2.AppShotClipboardPOC` bundle identifier remains part of the signing requirement so existing TCC permissions continue to match. The installer removes the old POC-named bundle after it verifies the renamed app.
+Local builds install as `/Applications/Open AppShot.app` with a universal `OpenAppShot` executable targeting macOS 15. The legacy `com.psg2.AppShotClipboardPOC` bundle identifier remains while the TCC migration is open. The installer removes the old POC-named bundle after it verifies the renamed app.
 
-Local builds are ad hoc signed with an identifier-only designated requirement. The requirement stays stable across rebuilds but does not provide production-grade identity. Public distribution requires Developer ID signing and notarization.
+Local builds use the default ad hoc designated requirement, which is tied to their code hashes. The build has no identifier-only override. The release packager requires a Developer ID Application identity, enables hardened runtime, builds both architectures, submits the archive for notarization, staples the ticket, verifies Gatekeeper, and writes a checksum.
+
+The repository keeps the prototype bundle identifier while the migration remains open. A machine that granted TCC access to the old identifier-only build must explicitly run `./Scripts/uninstall-local.sh --reset-permissions` and grant access again to the Developer ID build. Installation never revokes permissions without the user's request.
 
 ## Decisions still open
 
 - Developer ID ownership and release signing
-- License
+- Git remote and repository service activation
 - Clipboard representation selection in each target chat client
 - Per-app deny rules and visible screenshot redaction
 

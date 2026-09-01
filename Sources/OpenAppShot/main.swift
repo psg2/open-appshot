@@ -45,31 +45,54 @@ struct Snapshot {
 final class CaptureEngine {
     private let fileManager = FileManager.default
     private let baseDirectory: URL
+    private let retentionRoots: [URL]
     private let retentionDays: Int
     private let observationEngine: NativeObservationEngine
 
     init(
         baseDirectory: URL = CapturePreferences.captureRootURL,
+        retentionRoots: [URL] = CapturePreferences.knownCaptureRootURLs,
         retentionDays: Int = CapturePreferences.retentionDays,
         observationEngine: NativeObservationEngine = NativeObservationEngine()
     ) {
         self.baseDirectory = baseDirectory
+        var seen: Set<String> = []
+        self.retentionRoots = ([baseDirectory] + retentionRoots).filter {
+            seen.insert($0.standardizedFileURL.path).inserted
+        }
         self.retentionDays = retentionDays
         self.observationEngine = observationEngine
     }
 
     func capture(application: NSRunningApplication) throws -> Snapshot {
-        try prepareBaseDirectory()
-        try removeExpiredCaptures()
+        try CaptureStorage.prepareRoot(baseDirectory, fileManager: fileManager)
+        try CaptureStorage.removeExpiredCaptures(
+            at: baseDirectory,
+            retentionDays: retentionDays,
+            fileManager: fileManager
+        )
+        for root in retentionRoots where root.standardizedFileURL != baseDirectory.standardizedFileURL {
+            _ = try? CaptureStorage.removeExpiredCaptures(
+                at: root,
+                retentionDays: retentionDays,
+                fileManager: fileManager
+            )
+        }
 
         let id = snapshotDirectoryName()
         let capturedAt = Date()
-        let captureDirectory = baseDirectory.appendingPathComponent(id, isDirectory: true)
-        try fileManager.createDirectory(
-            at: captureDirectory,
-            withIntermediateDirectories: true,
-            attributes: [.posixPermissions: 0o700]
+        let finalDirectory = baseDirectory.appendingPathComponent(id, isDirectory: true)
+        let captureDirectory = try CaptureStorage.createStagingDirectory(
+            at: baseDirectory,
+            capturedAt: capturedAt,
+            fileManager: fileManager
         )
+        var committed = false
+        defer {
+            if !committed {
+                try? fileManager.removeItem(at: captureDirectory)
+            }
+        }
 
         let pid = application.processIdentifier
         let appName = application.localizedName ?? application.bundleIdentifier ?? "PID \(pid)"
@@ -90,7 +113,7 @@ final class CaptureEngine {
             bundleIdentifier: application.bundleIdentifier,
             pid: pid,
             observation: observation,
-            captureDirectory: captureDirectory,
+            captureDirectory: finalDirectory,
             captureStrategy: observation.captureStrategy
         )
         let contextURL = captureDirectory.appendingPathComponent("context.md")
@@ -114,13 +137,16 @@ final class CaptureEngine {
         try setPrivatePermissions(
             on: [screenshotURL, thumbnailURL, accessibilityURL, contextURL, metadataURL] + observation.diagnosticURLs)
 
+        try fileManager.moveItem(at: captureDirectory, to: finalDirectory)
+        committed = true
+
         return Snapshot(
             id: id,
             capturedAt: capturedAt,
-            directoryURL: captureDirectory,
-            screenshotURL: screenshotURL,
-            accessibilityURL: accessibilityURL,
-            contextURL: contextURL,
+            directoryURL: finalDirectory,
+            screenshotURL: finalDirectory.appendingPathComponent("screenshot.png"),
+            accessibilityURL: finalDirectory.appendingPathComponent("accessibility.json"),
+            contextURL: finalDirectory.appendingPathComponent("context.md"),
             contextText: contextText,
             accessibilityJSON: accessibilityJSON,
             appName: appName,
@@ -128,34 +154,6 @@ final class CaptureEngine {
             elementCount: observation.elements.count,
             captureStrategy: observation.captureStrategy
         )
-    }
-
-    private func prepareBaseDirectory() throws {
-        let alreadyExists = fileManager.fileExists(atPath: baseDirectory.path)
-        try fileManager.createDirectory(
-            at: baseDirectory,
-            withIntermediateDirectories: true,
-            attributes: [.posixPermissions: 0o700]
-        )
-        if !alreadyExists {
-            try fileManager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: baseDirectory.path)
-        }
-    }
-
-    private func removeExpiredCaptures() throws {
-        guard retentionDays > 0 else { return }
-        let expiration = Date().addingTimeInterval(-Double(retentionDays) * 24 * 60 * 60)
-        let urls = try fileManager.contentsOfDirectory(
-            at: baseDirectory,
-            includingPropertiesForKeys: [.creationDateKey, .isDirectoryKey],
-            options: [.skipsHiddenFiles]
-        )
-        for url in urls {
-            let values = try url.resourceValues(forKeys: [.creationDateKey, .isDirectoryKey])
-            if values.isDirectory == true, let creationDate = values.creationDate, creationDate < expiration {
-                try? fileManager.removeItem(at: url)
-            }
-        }
     }
 
     private func snapshotDirectoryName() -> String {
@@ -388,6 +386,9 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemVali
         model.clipboardModeChangedAction = { [weak self] in
             self?.updateClipboardModeMenuItem()
         }
+        model.historyChangedAction = { [weak self] in
+            self?.restoreLatestSnapshot()
+        }
         buildMainMenu()
         buildMenuBar()
         observeApplicationActivation()
@@ -591,10 +592,12 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemVali
             #selector(copySelectedScreenshot),
             #selector(copySelectedContext),
             #selector(revealSelectedCapture),
-            #selector(deleteSelectedCapture),
         ]
         if let action = menuItem.action, selectionActions.contains(action) {
             return mainWindowController.window?.isKeyWindow == true && model.selectedCapture != nil
+        }
+        if menuItem.action == #selector(deleteSelectedCapture) {
+            return mainWindowController.window?.isKeyWindow == true && model.selectedCapture?.canDelete == true
         }
 
         if menuItem.action == #selector(reloadHistory) {
@@ -708,7 +711,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemVali
                         }
                         self.lastSnapshot = snapshot
                         self.captureInProgress = false
-                        self.enableSnapshotActions()
+                        self.setSnapshotActionsEnabled(true)
                         self.model.captureCompleted(snapshot)
                         self.statusMenuItem.title =
                             CapturePreferences.copyAfterCapture
@@ -733,11 +736,11 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemVali
         }
     }
 
-    private func enableSnapshotActions() {
-        copyModeMenuItem.isEnabled = true
-        copyScreenshotMenuItem.isEnabled = true
-        copyContextMenuItem.isEnabled = true
-        revealMenuItem.isEnabled = true
+    private func setSnapshotActionsEnabled(_ enabled: Bool) {
+        copyModeMenuItem.isEnabled = enabled
+        copyScreenshotMenuItem.isEnabled = enabled
+        copyContextMenuItem.isEnabled = enabled
+        revealMenuItem.isEnabled = enabled
     }
 
     @objc private func copyUsingClipboardMode() {
@@ -874,9 +877,13 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemVali
     }
 
     private func restoreLatestSnapshot() {
-        guard let record = model.captures.first, let snapshot = try? record.snapshot() else { return }
+        guard let record = model.captures.first, let snapshot = try? record.snapshot() else {
+            lastSnapshot = nil
+            setSnapshotActionsEnabled(false)
+            return
+        }
         lastSnapshot = snapshot
-        enableSnapshotActions()
+        setSnapshotActionsEnabled(true)
     }
 
     private func setStatusIcon(symbol: String) {
@@ -970,8 +977,58 @@ if let capturePath = argumentValue(after: "--copy-capture", in: arguments) {
     }
 }
 
+if arguments.contains("--prune-captures") {
+    do {
+        guard let rootPath = argumentValue(after: "--storage-root", in: arguments),
+            let retentionValue = argumentValue(after: "--retention-days", in: arguments),
+            let retentionDays = Int(retentionValue),
+            retentionDays >= 0
+        else {
+            throw AppShotError.invalidArguments(
+                "--prune-captures requires --storage-root <path> and --retention-days <non-negative integer>"
+            )
+        }
+        let root = URL(fileURLWithPath: rootPath, isDirectory: true)
+        let removed = try CaptureStorage.removeExpiredCaptures(at: root, retentionDays: retentionDays)
+        print("removed=\(removed.count)")
+        exit(EXIT_SUCCESS)
+    } catch {
+        fputs("error=\(error.localizedDescription)\n", stderr)
+        exit(EXIT_FAILURE)
+    }
+}
+
+if let capturePath = argumentValue(after: "--capture-ownership", in: arguments) {
+    let directory = URL(fileURLWithPath: capturePath, isDirectory: true)
+    let canDelete =
+        CaptureStorage.hasOwnershipMarker(directory)
+        || CaptureStorage.hasVerifiedLegacyLayout(directory)
+    print("can_delete=\(canDelete)")
+    exit(EXIT_SUCCESS)
+}
+
+if let rootPath = argumentValue(after: "--purge-capture-root", in: arguments) {
+    do {
+        let root = URL(fileURLWithPath: rootPath, isDirectory: true)
+        let removed = try CaptureStorage.purgeOwnedCaptures(at: root)
+        print("removed=\(removed.count)")
+        exit(EXIT_SUCCESS)
+    } catch {
+        fputs("error=\(error.localizedDescription)\n", stderr)
+        exit(EXIT_FAILURE)
+    }
+}
+
 if arguments.contains("--capture-root") {
     print(CapturePreferences.captureRootURL.path)
+    exit(EXIT_SUCCESS)
+}
+
+if arguments.contains("--known-capture-roots-nul") {
+    let output = CapturePreferences.knownCaptureRootURLs
+        .map { Data($0.path.utf8) + Data([0]) }
+        .reduce(into: Data()) { $0.append($1) }
+    FileHandle.standardOutput.write(output)
     exit(EXIT_SUCCESS)
 }
 

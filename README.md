@@ -2,14 +2,14 @@
 
 Open AppShot captures the last active macOS window as pixels and Accessibility context. It keeps a local history and writes both representations to the clipboard for use in any chat or agent UI.
 
-Version 0.4.0 installs as `Open AppShot.app` with configurable clipboard modes, its own capture-and-accessibility icon, keyboard commands for capture history, and a configurable deletion confirmation. Its global shortcut and confirmation sound are configurable, and Command-W closes the window without quitting the capture service. The app remains capture-only. It cannot click, type, scroll, or invoke UI actions.
+Version 0.5.0 installs as a universal `Open AppShot.app` for Apple Silicon and Intel Macs. It has configurable clipboard modes, global and in-app shortcuts, capture history, safe retention, and a configurable deletion confirmation. Command-W closes the window without quitting the capture service. The app remains capture-only. It cannot click, type, scroll, or invoke UI actions.
 
-The installed bundle and executable are named Open AppShot. The app keeps the legacy bundle identifier `com.psg2.AppShotClipboardPOC` so macOS can reuse permissions granted to the prototype.
+The installed bundle and executable are named Open AppShot. The app currently keeps the legacy bundle identifier `com.psg2.AppShotClipboardPOC`. A Mac that granted permissions to an early identifier-only development build must reset those grants before using a distributable Developer ID build; see [Reset migrated permissions](#reset-migrated-permissions).
 
 ## Requirements
 
 - macOS 15 or later
-- Full Xcode with Swift
+- Xcode 16 or later with Swift
 - [mise](https://mise.jdx.dev/) for pinned repository tools
 
 Install the repository quality tools:
@@ -26,13 +26,17 @@ make smoke
 make install
 ```
 
-`make smoke` launches a deterministic local fixture and captures it through ScreenCaptureKit and Accessibility. It checks that the window fills the PNG without shadow padding, then verifies the Accessibility JSON, history metadata, private file permissions, and every clipboard mode. Peekaboo is not required.
+`make smoke` launches a deterministic local fixture behind normal windows and captures it through ScreenCaptureKit and Accessibility. It checks that the window fills the PNG without shadow padding, then verifies the Accessibility JSON, history metadata, private file permissions, and every clipboard mode. Peekaboo is not required.
+
+The fixture runs behind normal windows without a Dock icon and is removed when the test exits. It is never included in the application bundle. Local ad hoc builds use their code hash as identity; the repository does not offer an identifier-only signing mode.
 
 After installation, exercise the real global-hotkey path:
 
 ```sh
 make hotkey-smoke
 ```
+
+`make hotkey-smoke` installs the current sources before exercising the global shortcut, so it cannot pass against a stale app in `/Applications`.
 
 ## Development quality gates
 
@@ -99,13 +103,13 @@ Open Settings with Command-comma to:
 
 ## Storage and privacy
 
-New captures go to:
+Default captures go to:
 
 ```text
 ~/Library/Application Support/Open AppShot/Captures/<capture-id>/
 ```
 
-The app keeps showing captures from the default folder after you choose a custom destination. It also shows captures left by the original POC under `/tmp/AppShotClipboardPOC` until macOS clears them. Choosing a destination affects new captures only.
+When you choose a custom destination, Open AppShot creates its own `Open AppShot/Captures` subdirectory beneath it. The app remembers every 0.5-or-later capture root you selected, keeps those captures in history, and applies retention to each root. Retention never deletes arbitrary children of the folder you selected: it removes only validated Open AppShot capture directories. The app also shows captures from the default folder and strictly recognized POC locations. Unverified legacy items are read-only.
 
 Each capture contains:
 
@@ -114,9 +118,42 @@ Each capture contains:
 - `accessibility.json`
 - `context.md`
 - `metadata.json`
-- native window inventory
+- `.open-appshot-capture` ownership marker
+- selected-window diagnostic metadata
 
-Directories use mode `0700` and files use `0600`. Secure Accessibility values are redacted. Open AppShot does not use OCR, AI providers, telemetry, or network upload. A screenshot can still contain anything visibly present in the selected window.
+Directories use mode `0700` and files use `0600`. Secure Accessibility values are redacted. If the captured ScreenCaptureKit window cannot be confidently paired with an Accessibility window, AX output is marked incomplete instead of falling back to another window or the entire application. Open AppShot does not use OCR, AI providers, telemetry, or network upload. A screenshot can still contain anything visibly present in the selected window.
+
+Captures are written to a hidden staging directory and moved into history only after every required file is complete. A failed capture removes its staging data instead of leaving a hidden screenshot behind.
+
+## Uninstalling
+
+The default uninstall keeps captures, preferences, and permissions:
+
+```bash
+make uninstall
+```
+
+Removal of sensitive data and TCC grants is explicit:
+
+```bash
+./Scripts/uninstall-local.sh --data
+./Scripts/uninstall-local.sh --preferences
+./Scripts/uninstall-local.sh --reset-permissions
+./Scripts/uninstall-local.sh --all
+```
+
+The script stops the capture service before changing app state. `--data` removes only capture directories with verified Open AppShot ownership from known roots and the fixed POC temporary directory. It preserves unrelated files even inside those roots and never recursively removes the arbitrary custom root used by older versions.
+Run `make build` first if no current build exists; data removal never delegates ownership checks to a potentially old installed binary.
+
+## Reset migrated permissions
+
+Early local builds used an identifier-only ad hoc requirement. If this Mac granted Accessibility or Screen Recording to one of those builds, reset the old grants before trusting a Developer ID release:
+
+```bash
+./Scripts/uninstall-local.sh --reset-permissions
+```
+
+Open the signed app afterward and grant both permissions again. This reset is intentionally never run during installation.
 
 ## Clipboard modes
 
@@ -133,6 +170,7 @@ One pasteboard item advertises all representations for the selected mode. A rece
 
 ```text
 Sources/OpenAppShot/AppModel.swift  History, permissions, storage, and UI state
+Sources/OpenAppShot/CaptureStorage.swift  Capture ownership and safe retention
 Sources/OpenAppShot/Views.swift     Native SwiftUI windows and settings
 Sources/OpenAppShot/ObservationModels.swift  Native observation result models
 Sources/OpenAppShot/NativeObservationEngine.swift  ScreenCaptureKit and AX capture
@@ -154,7 +192,7 @@ Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the current boundaries, [d
 ## Current project status
 
 - CI, local hooks, formatting, linting, contract tests, Gitleaks, issue templates, and security guidance are ready.
+- The source is available under the MIT License.
 - The repository is still local; no Git remote is configured.
-- No open-source license has been selected, so the code is not ready to be published as open source yet.
-- Local builds use an ad hoc signature with a stable identifier-only designated requirement.
-- Public binary distribution still needs Developer ID signing, hardened-runtime review, and notarization.
+- Normal local builds use a code-hash-bound ad hoc identity. The repository has no weak identifier-only signing mode.
+- `make package-release` provides a fail-closed universal Developer ID, hardened-runtime, notarization, stapling, versioned archive, and portable checksum path once signing credentials are configured.

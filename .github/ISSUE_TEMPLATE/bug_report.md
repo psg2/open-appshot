@@ -19,7 +19,6 @@ assignees: ""
 
 - macOS version:
 - Open AppShot version or commit:
-- Peekaboo version:
 - Capture source app:
 - Accessibility permission enabled: yes / no
 - Screen Recording permission enabled: yes / no

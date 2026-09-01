@@ -24,7 +24,10 @@ The recommendation was implemented on 2026-08-31. `NativeObservationEngine`
 captures directly through public ScreenCaptureKit and Accessibility APIs. A
 temporary Peekaboo adapter verified the same 1040 x 624 output, 99.82% opaque pixel
 coverage, full width and height coverage, and eight AX elements. It was then
-removed. Normal setup and capture require neither Peekaboo nor Homebrew.
+removed. Normal setup and capture require neither Peekaboo nor Homebrew. The native
+engine now requires a geometric match between ScreenCaptureKit and Accessibility
+windows, reports unmatched AX as incomplete, and persists diagnostics only for the
+selected window.
 
 ## Scope of this assessment
 
@@ -157,7 +160,9 @@ A native implementation should not ship as the only engine until it has:
 5. **Privacy preservation.** Keep secure-field redaction in the observation model
    before any JSON, Markdown, history, or clipboard output is created.
 6. **Independent failure domains.** Pixel and AX failures must remain separable so
-   one useful representation can still be stored and copied.
+   one useful representation can still be stored and copied. An unmatched AX window
+   is now stored as explicitly incomplete context; a ScreenCaptureKit failure still
+   aborts the capture.
 7. **Representative fixtures.** Exercise native AppKit/SwiftUI, Finder, Slack or
    another Electron app, a Chromium browser, multiple windows, multiple displays,
    permission denial, AX timeout, and partial-tree truncation.

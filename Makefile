@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help setup hooks format format-check lint lint-shell lint-actions lint-plist test ci check scan-secrets build install smoke hotkey-smoke clean
+.PHONY: help setup hooks format format-check lint lint-shell lint-actions lint-plist test ci check scan-secrets build install uninstall smoke hotkey-smoke package-release clean
 
 help: ## Show available commands
 	@echo "Available commands:"
@@ -47,11 +47,17 @@ build: ## Build and ad hoc sign the app bundle
 install: ## Install the current build in /Applications
 	./Scripts/install-local.sh
 
+uninstall: ## Remove the installed app but preserve captures, preferences, and permissions
+	./Scripts/uninstall-local.sh --app
+
 smoke: build ## Exercise the native capture and clipboard behavior (requires macOS permissions)
 	./Scripts/smoke-test.sh
 
-hotkey-smoke: ## Exercise the installed app's global hotkey (requires permissions)
+hotkey-smoke: install ## Install current sources and exercise the global hotkey (requires permissions)
 	./Scripts/hotkey-smoke-test.sh
+
+package-release: ## Build, sign, notarize, and package a universal release
+	./Scripts/package-release.sh
 
 clean: ## Remove generated build artifacts
 	rm -rf build

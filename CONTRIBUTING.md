@@ -4,7 +4,7 @@ Thanks for helping improve Open AppShot. The project is intentionally capture-on
 
 ## Development setup
 
-You need macOS 15 or later and full Xcode. Install the repository tools and Git hooks:
+You need macOS 15 or later and Xcode 16 or later. Install the repository tools and Git hooks:
 
 ```bash
 make setup
@@ -30,6 +30,8 @@ make hotkey-smoke
 ```
 
 The smoke tests need Accessibility and Screen Recording permission. GitHub-hosted runners cannot grant those permissions, so CI runs the bundle and CLI contract suite instead.
+
+Normal ad hoc builds use a code-hash-bound identity. macOS may require renewed Accessibility and Screen Recording consent after code changes. The repository intentionally has no identifier-only signing mode. `make hotkey-smoke` installs the current build before testing it.
 
 ## Conventions
 

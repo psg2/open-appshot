@@ -21,4 +21,6 @@ Open AppShot handles sensitive local data:
 - clipboard output can be read by the receiving application;
 - Accessibility and Screen Recording are powerful macOS permissions.
 
-Reports about permission bypasses, capture of the wrong window, insecure file permissions, insufficient redaction, clipboard disclosure, or unexpected network access are in scope. Vulnerabilities in macOS, Peekaboo, or a captured third-party application should also be reported to their respective maintainers.
+Reports about permission bypasses, capture of the wrong window, insecure file permissions, unsafe retention, insufficient redaction, clipboard disclosure, or unexpected network access are in scope. Vulnerabilities in macOS or a captured third-party application should also be reported to their respective maintainers.
+
+Machines that granted permissions to an early identifier-only development build should run `./Scripts/uninstall-local.sh --reset-permissions` before using a signed public release. This removes the weak historical TCC grants and requires fresh consent for the Developer ID build.

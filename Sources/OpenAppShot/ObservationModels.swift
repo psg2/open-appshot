@@ -106,6 +106,22 @@ struct ObservationTruncation: Codable {
     var incompleteAccessibilityRead = false
     var reason: String?
 
+    init(
+        maxDepthReached: Bool = false,
+        maxElementCountReached: Bool = false,
+        maxChildrenPerNodeReached: Bool = false,
+        deadlineReached: Bool = false,
+        incompleteAccessibilityRead: Bool = false,
+        reason: String? = nil
+    ) {
+        self.maxDepthReached = maxDepthReached
+        self.maxElementCountReached = maxElementCountReached
+        self.maxChildrenPerNodeReached = maxChildrenPerNodeReached
+        self.deadlineReached = deadlineReached
+        self.incompleteAccessibilityRead = incompleteAccessibilityRead
+        self.reason = reason
+    }
+
     enum CodingKeys: String, CodingKey {
         case maxDepthReached = "max_depth_reached"
         case maxElementCountReached = "max_element_count_reached"
@@ -145,6 +161,7 @@ private struct AccessibilityPayload: Codable {
 
 enum ObservationEngineError: LocalizedError {
     case noWindow(String)
+    case ambiguousWindow(String)
     case screenCaptureTimedOut
     case screenCaptureFailed(String)
     case missingScreenshot
@@ -153,6 +170,8 @@ enum ObservationEngineError: LocalizedError {
         switch self {
         case .noWindow(let appName):
             return "No capturable window was found for \(appName)."
+        case .ambiguousWindow(let appName):
+            return "Open AppShot could not identify one active window for \(appName). Bring the intended window forward and try again."
         case .screenCaptureTimedOut:
             return "Native macOS window capture timed out."
         case .screenCaptureFailed(let message):

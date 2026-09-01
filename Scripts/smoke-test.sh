@@ -9,7 +9,8 @@ ICON="$APP_PATH/Contents/Resources/AppIcon.icns"
 FIXTURE_BINARY="$REPO_ROOT/build/capture-fixture"
 IMAGE_INSPECTOR="$REPO_ROOT/build/inspect-image"
 capture_directory=""
-test_succeeded=0
+no_window_fixture_pid=""
+ambiguous_fixture_pid=""
 
 if [[ ! -x "$BINARY" || ! -s "$ICON" ]]; then
   "$SCRIPT_DIR/build.sh"
@@ -35,14 +36,28 @@ xcrun swiftc \
   "$REPO_ROOT/Tests/Support/InspectImage.swift" \
   -o "$IMAGE_INSPECTOR"
 
-"$FIXTURE_BINARY" &
+"$FIXTURE_BINARY" --background &
 fixture_pid=$!
 cleanup() {
   kill "$fixture_pid" 2>/dev/null || true
   wait "$fixture_pid" 2>/dev/null || true
-  if [[ "$test_succeeded" -eq 1 && -n "$capture_directory" && -d "$capture_directory" ]]; then
+  if [[ -n "$no_window_fixture_pid" ]]; then
+    kill "$no_window_fixture_pid" 2>/dev/null || true
+    wait "$no_window_fixture_pid" 2>/dev/null || true
+  fi
+  if [[ -n "$ambiguous_fixture_pid" ]]; then
+    kill "$ambiguous_fixture_pid" 2>/dev/null || true
+    wait "$ambiguous_fixture_pid" 2>/dev/null || true
+  fi
+  if [[ -n "$capture_directory" && -d "$capture_directory" ]]; then
     case "$capture_directory" in
-      "$CAPTURE_ROOT"/*) rm -rf -- "$capture_directory" ;;
+      "$CAPTURE_ROOT"/*)
+        if [[ -f "$capture_directory/metadata.json" ]] \
+          && [[ "$(jq -r '.appName // empty' "$capture_directory/metadata.json")" == "capture-fixture" ]] \
+          && [[ "$(jq -r '.windowTitle // empty' "$capture_directory/metadata.json")" == "Open AppShot Capture Fixture" ]]; then
+          rm -rf -- "$capture_directory"
+        fi
+        ;;
     esac
   fi
 }
@@ -102,10 +117,38 @@ directory_mode=$(stat -f '%Sp' "$capture_directory")
 screenshot_mode=$(stat -f '%Sp' "$capture_directory/screenshot.png")
 thumbnail_mode=$(stat -f '%Sp' "$capture_directory/thumbnail.png")
 metadata_mode=$(stat -f '%Sp' "$capture_directory/metadata.json")
+marker_mode=$(stat -f '%Sp' "$capture_directory/.open-appshot-capture")
 [[ "$directory_mode" == "drwx------" ]]
 [[ "$screenshot_mode" == "-rw-------" ]]
 [[ "$thumbnail_mode" == "-rw-------" ]]
 [[ "$metadata_mode" == "-rw-------" ]]
+[[ "$marker_mode" == "-rw-------" ]]
+
+"$FIXTURE_BINARY" --background --no-window &
+no_window_fixture_pid=$!
+sleep 1
+before_failed_capture=$(find "$CAPTURE_ROOT" -mindepth 1 -maxdepth 1 -print | sort)
+if "$BINARY" --capture-once --pid "$no_window_fixture_pid" --clipboard-mode full >/dev/null 2>&1; then
+  echo "Capture unexpectedly succeeded for a fixture without windows" >&2
+  exit 1
+fi
+after_failed_capture=$(find "$CAPTURE_ROOT" -mindepth 1 -maxdepth 1 -print | sort)
+[[ "$before_failed_capture" == "$after_failed_capture" ]]
+[[ -z "$(find "$CAPTURE_ROOT" -mindepth 1 -maxdepth 1 -name '.staging-*' -print -quit)" ]]
+
+"$FIXTURE_BINARY" --background --ambiguous-windows &
+ambiguous_fixture_pid=$!
+sleep 1
+before_ambiguous_capture=$(find "$CAPTURE_ROOT" -mindepth 1 -maxdepth 1 -print | sort)
+if "$BINARY" --capture-once --pid "$ambiguous_fixture_pid" --clipboard-mode full \
+  >"$REPO_ROOT/build/ambiguous.stdout" 2>"$REPO_ROOT/build/ambiguous.stderr"; then
+  echo "Capture unexpectedly selected one of two indistinguishable windows" >&2
+  exit 1
+fi
+grep -Fq 'could not identify one active window' "$REPO_ROOT/build/ambiguous.stderr"
+after_ambiguous_capture=$(find "$CAPTURE_ROOT" -mindepth 1 -maxdepth 1 -print | sort)
+[[ "$before_ambiguous_capture" == "$after_ambiguous_capture" ]]
+[[ -z "$(find "$CAPTURE_ROOT" -mindepth 1 -maxdepth 1 -name '.staging-*' -print -quit)" ]]
 
 history_count=$("$BINARY" --history-count)
 [[ "$history_count" -gt 0 ]]
@@ -137,5 +180,6 @@ printf 'clipboard_modes=full,references,image,accessibility\n'
 printf 'history_count=%s\n' "$history_count"
 printf 'icon=%s\n' "$icon_file"
 printf 'observation_engine=native\n'
-test_succeeded=1
+printf 'failed_capture_cleanup=GREEN\n'
+printf 'ambiguous_window_rejection=GREEN\n'
 echo "smoke=GREEN"

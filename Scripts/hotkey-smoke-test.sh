@@ -5,13 +5,22 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 INSTALLED_APP="/Applications/Open AppShot.app"
 INSTALLED_BINARY="$INSTALLED_APP/Contents/MacOS/OpenAppShot"
+BUILT_APP="$REPO_ROOT/build/Open AppShot.app"
+BUILT_BINARY="$BUILT_APP/Contents/MacOS/OpenAppShot"
 TRIGGER="$REPO_ROOT/build/trigger-hotkey"
 FIXTURE_BINARY="$REPO_ROOT/build/capture-fixture"
 latest_capture=""
-test_succeeded=0
+before_directories=$(mktemp)
+current_directories=$(mktemp)
 
 if [[ ! -x "$INSTALLED_BINARY" ]]; then
   echo "Install the app first with: make install" >&2
+  exit 1
+fi
+if [[ ! -x "$BUILT_BINARY" ]] \
+  || ! cmp -s "$BUILT_BINARY" "$INSTALLED_BINARY" \
+  || ! cmp -s "$BUILT_APP/Contents/Info.plist" "$INSTALLED_APP/Contents/Info.plist"; then
+  echo "The installed app does not match the current build. Run: make install" >&2
   exit 1
 fi
 
@@ -46,23 +55,31 @@ for _ in {1..50}; do
   sleep 0.2
 done
 
-"$FIXTURE_BINARY" &
+find "$CAPTURE_ROOT" -mindepth 1 -maxdepth 1 -type d -print 2>/dev/null | sort >"$before_directories"
+
+"$FIXTURE_BINARY" --background --activate-for-hotkey &
 fixture_pid=$!
 # ShellCheck does not treat a function referenced by a trap as invoked.
 # shellcheck disable=SC2329
 cleanup() {
   kill "$fixture_pid" 2>/dev/null || true
   wait "$fixture_pid" 2>/dev/null || true
-  if [[ "$test_succeeded" -eq 1 && -n "$latest_capture" && -d "$latest_capture" ]]; then
+  if [[ -n "$latest_capture" && -d "$latest_capture" ]]; then
     case "$latest_capture" in
-      "$CAPTURE_ROOT"/*) rm -rf -- "$latest_capture" ;;
+      "$CAPTURE_ROOT"/*)
+        if [[ -f "$latest_capture/metadata.json" ]] \
+          && [[ "$(jq -r '.appName // empty' "$latest_capture/metadata.json")" == "capture-fixture" ]] \
+          && [[ "$(jq -r '.windowTitle // empty' "$latest_capture/metadata.json")" == "Open AppShot Capture Fixture" ]]; then
+          rm -rf -- "$latest_capture"
+        fi
+        ;;
     esac
   fi
+  rm -f "$before_directories" "$current_directories"
 }
 trap cleanup EXIT
 sleep 1
 
-before=$(find "$CAPTURE_ROOT" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
 hotkey_json=$("$INSTALLED_BINARY" --hotkey-json)
 hotkey_kind=$(printf '%s' "$hotkey_json" | jq -r '.kind')
 trigger_configured_hotkey() {
@@ -83,10 +100,18 @@ for attempt in {1..100}; do
   if (( attempt == 25 || attempt == 50 || attempt == 75 )); then
     trigger_configured_hotkey
   fi
-  after=$(find "$CAPTURE_ROOT" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
-  if [[ "$after" -gt "$before" ]]; then
-    latest_capture=$(find "$CAPTURE_ROOT" -mindepth 1 -maxdepth 1 -type d -print | sort | tail -1)
-    if [[ -f "$latest_capture/context.md" ]]; then
+  find "$CAPTURE_ROOT" -mindepth 1 -maxdepth 1 -type d -print 2>/dev/null | sort >"$current_directories"
+  while IFS= read -r candidate; do
+    if [[ -f "$candidate/metadata.json" ]] \
+      && [[ "$(jq -r '.appName // empty' "$candidate/metadata.json")" == "capture-fixture" ]] \
+      && [[ "$(jq -r '.windowTitle // empty' "$candidate/metadata.json")" == "Open AppShot Capture Fixture" ]]; then
+      latest_capture="$candidate"
+      break
+    fi
+  done < <(comm -13 "$before_directories" "$current_directories")
+
+  if [[ -n "$latest_capture" ]]; then
+    if [[ -f "$latest_capture/context.md" && -f "$latest_capture/accessibility.json" && -f "$latest_capture/windows.json" ]]; then
       observation_engine=$(jq -r '.data.engine' "$latest_capture/accessibility.json")
       [[ "$observation_engine" == "native" ]]
       runtime_host=$(jq -r '.engine' "$latest_capture/windows.json")
@@ -98,12 +123,7 @@ for attempt in {1..100}; do
       printf '%s\n' "$runtime_host"
       printf '%s\n' "$clipboard"
       echo "hotkey_smoke=GREEN attempts=$attempt kind=$hotkey_kind engine=$observation_engine"
-      test_succeeded=1
       exit 0
-    fi
-    if [[ -f "$latest_capture/windows.json" ]] && jq -e '.success == false' "$latest_capture/windows.json" >/dev/null 2>&1; then
-      jq '{success,error,debug_logs}' "$latest_capture/windows.json" >&2
-      exit 1
     fi
   fi
   sleep 0.2

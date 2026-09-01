@@ -4,8 +4,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 SOURCE_ICON="$REPO_ROOT/Resources/AppIcon.png"
-ICONSET_DIR="$REPO_ROOT/build/AppIcon.iconset"
-OUTPUT_ICON="$REPO_ROOT/build/AppIcon.icns"
+ICON_BUILD_ROOT="${OPEN_APPSHOT_ICON_BUILD_ROOT:-$REPO_ROOT/build}"
+ICONSET_DIR="$ICON_BUILD_ROOT/AppIcon.iconset"
+OUTPUT_ICON="$ICON_BUILD_ROOT/AppIcon.icns"
 
 if [[ ! -f "$SOURCE_ICON" ]]; then
   echo "Missing icon source: $SOURCE_ICON" >&2

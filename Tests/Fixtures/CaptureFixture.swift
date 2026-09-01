@@ -1,9 +1,28 @@
 import AppKit
 
 final class FixtureDelegate: NSObject, NSApplicationDelegate {
-    private var window: NSWindow?
+    private var windows: [NSWindow] = []
+    private let runsInBackground = CommandLine.arguments.contains("--background")
+    private let activatesForHotkey = CommandLine.arguments.contains("--activate-for-hotkey")
+    private let createsWindow = !CommandLine.arguments.contains("--no-window")
+    private let createsAmbiguousWindows = CommandLine.arguments.contains("--ambiguous-windows")
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        guard createsWindow else { return }
+        let window = makeWindow()
+        window.center()
+        present(window)
+        windows.append(window)
+
+        if createsAmbiguousWindows {
+            let duplicate = makeWindow()
+            duplicate.setFrameOrigin(window.frame.origin)
+            duplicate.orderBack(nil)
+            windows.append(duplicate)
+        }
+    }
+
+    private func makeWindow() -> NSWindow {
         let label = NSTextField(labelWithString: "Observable Accessibility content")
         label.font = .systemFont(ofSize: 18, weight: .medium)
 
@@ -24,15 +43,24 @@ final class FixtureDelegate: NSObject, NSApplicationDelegate {
         )
         window.title = "Open AppShot Capture Fixture"
         window.contentView = stack
-        window.center()
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
-        self.window = window
+        return window
+    }
+
+    private func present(_ window: NSWindow) {
+        if runsInBackground {
+            window.orderBack(nil)
+            if activatesForHotkey {
+                NSApp.activate(ignoringOtherApps: true)
+            }
+        } else {
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+        }
     }
 }
 
 let application = NSApplication.shared
 let delegate = FixtureDelegate()
 application.delegate = delegate
-application.setActivationPolicy(.regular)
+application.setActivationPolicy(CommandLine.arguments.contains("--background") ? .accessory : .regular)
 application.run()

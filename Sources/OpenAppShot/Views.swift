@@ -179,7 +179,7 @@ private struct CaptureRow: View {
                 HStack(spacing: 4) {
                     Text(capture.metadata.capturedAt.formatted(date: .abbreviated, time: .shortened))
                     if capture.isLegacy {
-                        Text("Legacy")
+                        Text(capture.canDelete ? "Legacy" : "Read-only legacy")
                             .foregroundStyle(.tertiary)
                     }
                 }
@@ -188,7 +188,7 @@ private struct CaptureRow: View {
             }
 
             Spacer(minLength: 2)
-            if isHovering || isSelected {
+            if capture.canDelete && (isHovering || isSelected) {
                 Button {
                     model.requestDeletion(capture)
                 } label: {
@@ -407,6 +407,7 @@ private struct CaptureDetail: View {
                     Divider()
                     Button("Reveal in Finder") { model.reveal(capture) }
                     Button("Delete Capture…", role: .destructive) { model.requestDeletion(capture) }
+                        .disabled(!capture.canDelete)
                 } label: {
                     Label("Capture Actions", systemImage: "ellipsis.circle")
                 }
@@ -653,7 +654,7 @@ struct OpenAppShotSettingsView: View {
                 Text("Storage")
             } footer: {
                 Text(
-                    "New captures use this folder. Captures in the default folder stay visible, along with POC captures under /tmp until macOS clears them."
+                    "New captures use this folder. Previously selected Open AppShot folders remain visible and follow the retention setting. Unverified POC captures are read-only."
                 )
             }
 
@@ -747,7 +748,7 @@ private struct ShortcutRecorderSheet: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     @State private var candidate: CaptureHotkey?
-    @State private var message = "Press a shortcut with Command, Option, or Control."
+    @State private var message = "Press a shortcut with at least two modifiers."
 
     var body: some View {
         VStack(spacing: 20) {
@@ -759,7 +760,7 @@ private struct ShortcutRecorderSheet: View {
             VStack(spacing: 6) {
                 Text("Record capture shortcut")
                     .font(.title2.weight(.semibold))
-                Text("Press both Option keys, or a key combination that includes Command, Option, or Control.")
+                Text("Press both Option keys, or a key combination with at least two modifiers including Command, Option, or Control.")
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 430)
@@ -855,7 +856,7 @@ private final class ShortcutRecorderNSView: NSView {
 
     override func keyDown(with event: NSEvent) {
         guard let hotkey = CaptureHotkey.keyboard(event: event) else {
-            onResult?(nil, "Include Command, Option, or Control in the shortcut.")
+            onResult?(nil, "Use at least two modifiers, including Command, Option, or Control.")
             NSSound.beep()
             return
         }
