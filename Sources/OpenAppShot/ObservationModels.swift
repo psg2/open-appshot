@@ -68,6 +68,7 @@ struct ObservedElement: Codable {
     let elementDescription: String?
     let help: String?
     let bounds: ObservedBounds?
+    let isSecure: Bool
     let isActionable: Bool
     let isEnabled: Bool?
     let isFocused: Bool?
@@ -85,16 +86,11 @@ struct ObservedElement: Codable {
         case elementDescription = "description"
         case help
         case bounds
+        case isSecure = "is_secure"
         case isActionable = "is_actionable"
         case isEnabled = "is_enabled"
         case isFocused = "is_focused"
         case actions
-    }
-
-    var isSecure: Bool {
-        [role, subrole, elementDescription]
-            .compactMap { $0?.lowercased() }
-            .contains { $0.contains("secure") || $0.contains("password") }
     }
 }
 
