@@ -1,13 +1,8 @@
-# Renovate handles routine version updates. Dependabot remains registered so
-# GitHub can open security updates when repository security alerts are enabled.
 version: 2
-
 updates:
-  - package-ecosystem: "github-actions"
-    directory: "/"
+  - package-ecosystem: github-actions
+    directory: /
     schedule:
-      interval: "monthly"
-    open-pull-requests-limit: 0
+      interval: monthly
     labels:
-      - "dependencies"
-      - "security"
+      - dependencies

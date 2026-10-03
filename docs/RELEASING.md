@@ -8,9 +8,9 @@ Before making the repository public:
 
 1. Confirm the checked-in MIT License remains the intended license.
 2. Add the GitHub remote and push `main`.
-3. Enable branch protection with the `Secrets Scan`, `Format · Lint · Build · Test`, and `Minimum macOS 15` checks required.
+3. Enable branch protection with the `Secrets Scan`, `Format · Lint · Build · Test`, and `Minimum macOS 15 (macos-15)`, and `Minimum macOS 15 (macos-15-intel)` checks required.
 4. Enable private vulnerability reporting and Dependabot security alerts.
-5. Install Renovate and CodeRabbit if those services should manage dependencies and reviews.
+5. Install CodeRabbit if it should review pull requests. Dependabot opens monthly GitHub Actions updates without extra setup.
 6. Confirm that the legacy bundle identifier remains acceptable or plan a documented TCC permission migration.
 7. On every machine used by the POC, run `./Scripts/uninstall-local.sh --reset-permissions` before granting permissions to a Developer ID release.
 
