@@ -79,8 +79,8 @@ final class CaptureEngine {
             )
         }
 
-        let id = snapshotDirectoryName()
         let capturedAt = Date()
+        let id = snapshotDirectoryName(for: capturedAt)
         let finalDirectory = baseDirectory.appendingPathComponent(id, isDirectory: true)
         let captureDirectory = try CaptureStorage.createStagingDirectory(
             at: baseDirectory,
@@ -112,6 +112,7 @@ final class CaptureEngine {
             appName: appName,
             bundleIdentifier: application.bundleIdentifier,
             pid: pid,
+            capturedAt: capturedAt,
             observation: observation,
             captureDirectory: finalDirectory,
             captureStrategy: observation.captureStrategy
@@ -156,16 +157,18 @@ final class CaptureEngine {
         )
     }
 
-    private func snapshotDirectoryName() -> String {
+    private func snapshotDirectoryName(for capturedAt: Date) -> String {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime]
-        return formatter.string(from: Date()).replacingOccurrences(of: ":", with: "-") + "-" + UUID().uuidString.lowercased()
+        return formatter.string(from: capturedAt).replacingOccurrences(of: ":", with: "-") + "-"
+            + UUID().uuidString.lowercased()
     }
 
     private func buildContext(
         appName: String,
         bundleIdentifier: String?,
         pid: pid_t,
+        capturedAt: Date,
         observation: ObservationResult,
         captureDirectory: URL,
         captureStrategy: String
@@ -173,7 +176,7 @@ final class CaptureEngine {
         var lines = [
             "# AppShot context",
             "",
-            "Captured: \(ISO8601DateFormatter().string(from: Date()))",
+            "Captured: \(ISO8601DateFormatter().string(from: capturedAt))",
             "Application: \(appName)",
             "Bundle ID: \(bundleIdentifier ?? "unknown")",
             "PID: \(pid)",

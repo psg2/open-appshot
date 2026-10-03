@@ -159,7 +159,7 @@ struct CaptureHotkey: Codable, Equatable {
         case 126: return "↑"
         default:
             let characters = event.charactersIgnoringModifiers?.trimmingCharacters(in: .whitespacesAndNewlines)
-            return characters?.isEmpty == false ? characters!.uppercased() : "Key (event.keyCode)"
+            return characters?.isEmpty == false ? characters!.uppercased() : "Key \(event.keyCode)"
         }
     }
 }

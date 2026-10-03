@@ -302,6 +302,23 @@ private struct NativeAXCollection {
     let truncation: ObservationTruncation
 }
 
+// CFHash alone is not identity: two distinct elements may collide, so equality must go through CFEqual.
+private struct AXElementIdentity: Hashable {
+    let element: AXUIElement
+
+    init(_ element: AXUIElement) {
+        self.element = element
+    }
+
+    static func == (lhs: AXElementIdentity, rhs: AXElementIdentity) -> Bool {
+        CFEqual(lhs.element, rhs.element)
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(CFHash(element))
+    }
+}
+
 private final class NativeAXTreeCollector {
     private let maxDepth = 20
     private let maxElements = 1_500
@@ -319,7 +336,7 @@ private final class NativeAXTreeCollector {
         let deadline = Date().addingTimeInterval(deadlineInterval)
         var truncation = ObservationTruncation()
         var elements: [ObservedElement] = []
-        var seen: Set<CFHashCode> = []
+        var seen: Set<AXElementIdentity> = []
         var stack: [(element: AXUIElement, depth: Int, parentIndex: Int?)] = [(root, 0, nil)]
 
         while let current = stack.popLast() {
@@ -334,8 +351,7 @@ private final class NativeAXTreeCollector {
                 break
             }
 
-            let identity = CFHash(current.element)
-            guard seen.insert(identity).inserted else { continue }
+            guard seen.insert(AXElementIdentity(current.element)).inserted else { continue }
             AXUIElementSetMessagingTimeout(current.element, 0.2)
 
             let index = elements.count
@@ -363,7 +379,8 @@ private final class NativeAXTreeCollector {
         let role = AXReader.stringAttribute(element, kAXRoleAttribute as String) ?? "AXUnknown"
         let subrole = AXReader.stringAttribute(element, kAXSubroleAttribute as String)
         let roleDescription = AXReader.stringAttribute(element, "AXRoleDescription")
-        let secure = [role, subrole, roleDescription]
+        let description = AXReader.stringAttribute(element, kAXDescriptionAttribute as String)
+        let secure = [role, subrole, roleDescription, description]
             .compactMap { $0?.lowercased() }
             .contains { $0.contains("secure") || $0.contains("password") }
         let actions = AXReader.actionNames(element)
@@ -378,9 +395,10 @@ private final class NativeAXTreeCollector {
             label: AXReader.stringAttribute(element, "AXLabel"),
             title: AXReader.stringAttribute(element, kAXTitleAttribute as String),
             value: secure ? "[secure value redacted]" : AXReader.stringAttribute(element, kAXValueAttribute as String),
-            elementDescription: AXReader.stringAttribute(element, kAXDescriptionAttribute as String) ?? roleDescription,
+            elementDescription: description ?? roleDescription,
             help: AXReader.stringAttribute(element, kAXHelpAttribute as String),
             bounds: AXReader.bounds(of: element).map(ObservedBounds.init),
+            isSecure: secure,
             isActionable: !actions.isEmpty || knownActionableRoles.contains(role),
             isEnabled: AXReader.boolAttribute(element, kAXEnabledAttribute as String),
             isFocused: AXReader.boolAttribute(element, kAXFocusedAttribute as String),
@@ -390,10 +408,10 @@ private final class NativeAXTreeCollector {
 
     private func children(of element: AXUIElement) -> [AXUIElement] {
         var children: [AXUIElement] = []
-        var seen: Set<CFHashCode> = []
+        var seen: Set<AXElementIdentity> = []
         for attribute in childAttributes {
             for child in AXReader.elementArrayAttribute(element, attribute) {
-                if seen.insert(CFHash(child)).inserted {
+                if seen.insert(AXElementIdentity(child)).inserted {
                     children.append(child)
                 }
             }
@@ -426,7 +444,10 @@ private enum AXReader {
     }
 
     static func elementAttribute(_ element: AXUIElement, _ attribute: String) -> AXUIElement? {
-        value(element, attribute) as! AXUIElement?
+        guard let value = value(element, attribute), CFGetTypeID(value) == AXUIElementGetTypeID() else {
+            return nil
+        }
+        return (value as! AXUIElement)
     }
 
     static func elementArrayAttribute(_ element: AXUIElement, _ attribute: String) -> [AXUIElement] {
