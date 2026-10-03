@@ -35,49 +35,49 @@ macOS ties Accessibility and Screen Recording grants to the exact ad hoc signed 
 Install the repository quality tools:
 
 ```sh
-make setup
+mise install
 ```
 
 ### Build and install
 
 ```sh
-make build
-make smoke
-make install
+mise run build
+mise run smoke
+mise run install
 ```
 
-`make smoke` launches a deterministic local fixture behind normal windows and captures it through ScreenCaptureKit and Accessibility. It checks that the window fills the PNG without shadow padding, then verifies the Accessibility JSON, history metadata, private file permissions, and every clipboard mode. Peekaboo is not required.
+`mise run smoke` launches a deterministic local fixture behind normal windows and captures it through ScreenCaptureKit and Accessibility. It checks that the window fills the PNG without shadow padding, then verifies the Accessibility JSON, history metadata, private file permissions, and every clipboard mode. Peekaboo is not required.
 
 The fixture runs behind normal windows without a Dock icon and is removed when the test exits. It is never included in the application bundle. Local ad hoc builds use their code hash as identity; the repository does not offer an identifier-only signing mode.
 
 After installation, exercise the real global-hotkey path:
 
 ```sh
-make hotkey-smoke
+mise run hotkey-smoke
 ```
 
-`make hotkey-smoke` installs the current sources before exercising the global shortcut, so it cannot pass against a stale app in `/Applications`.
+`mise run hotkey-smoke` installs the current sources before exercising the global shortcut, so it cannot pass against a stale app in `/Applications`.
 
 ## Development quality gates
 
 Install the same local tools used by CI and enable the pre-push hook:
 
 ```sh
-make setup
-make hooks
+mise install
+mise run hooks
 ```
 
 The main commands are:
 
 ```sh
-make format        # rewrite Swift sources with swift-format
-make lint          # swift-format, ShellCheck, actionlint, and plist checks
-make test          # unit tests, then CI-safe bundle and command-line contract tests
-make scan-secrets  # full-history Gitleaks scan
-make check         # all publication gates above
+mise run format        # rewrite Swift sources with swift-format
+mise run lint          # swift-format, ShellCheck, actionlint, and plist checks
+mise run test          # unit tests, then CI-safe bundle and command-line contract tests
+mise run scan-secrets  # full-history Gitleaks scan
+mise run check         # all publication gates above
 ```
 
-`make test` does not need Accessibility or Screen Recording access. The capture and global-hotkey smoke tests remain local because GitHub-hosted runners cannot grant those macOS permissions.
+`mise run test` does not need Accessibility or Screen Recording access. The capture and global-hotkey smoke tests remain local because GitHub-hosted runners cannot grant those macOS permissions.
 
 ## First run
 
@@ -151,7 +151,7 @@ Captures are written to a hidden staging directory and moved into history only a
 The default uninstall keeps captures, preferences, and permissions:
 
 ```bash
-make uninstall
+mise run uninstall
 ```
 
 Removal of sensitive data and TCC grants is explicit:
@@ -164,7 +164,7 @@ Removal of sensitive data and TCC grants is explicit:
 ```
 
 The script stops the capture service before changing app state. `--data` removes only capture directories with verified Open AppShot ownership from known roots and the fixed POC temporary directory. It preserves unrelated files even inside those roots and never recursively removes the arbitrary custom root used by older versions.
-Run `make build` first if no current build exists; data removal never delegates ownership checks to a potentially old installed binary.
+Run `mise run build` first if no current build exists; data removal never delegates ownership checks to a potentially old installed binary.
 
 ## Reset migrated permissions
 
@@ -216,7 +216,7 @@ docs/                               Architecture, release process, and README im
 .github/workflows/ci.yml            Secret scanning and macOS quality gates
 .github/workflows/release.yml       Tag-triggered universal release with checksum
 VERSION                             Release version used by the build and release workflow
-mise.toml                           Pinned local and CI quality tools
+mise.toml                           Pinned tools and every repository task (`mise tasks`)
 lefthook.yml                        Local pre-push quality gates
 ```
 
@@ -228,4 +228,4 @@ Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the current boundaries, [d
 - The source is available under the MIT License.
 - The repository is hosted at [psg2/open-appshot](https://github.com/psg2/open-appshot).
 - Normal local builds use a code-hash-bound ad hoc identity. The repository has no weak identifier-only signing mode.
-- Pushing a `vX.Y.Z` tag publishes a universal ad hoc signed release with a SHA-256 checksum. `make package-release` also supports Developer ID signing and notarization once credentials exist; see [docs/RELEASING.md](docs/RELEASING.md).
+- Pushing a `vX.Y.Z` tag publishes a universal ad hoc signed release with a SHA-256 checksum. `mise run package-release` also supports Developer ID signing and notarization once credentials exist; see [docs/RELEASING.md](docs/RELEASING.md).

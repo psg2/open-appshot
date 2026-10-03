@@ -1,6 +1,6 @@
 # Releasing Open AppShot
 
-Releases are built by `.github/workflows/release.yml` when a `vX.Y.Z` tag is pushed. The workflow checks that the tag matches `VERSION`, runs `make test`, packages a universal ad hoc signed archive with `Scripts/package-release.sh`, and publishes the ZIP and its `.sha256` file with `docs/release-notes.md` as the release notes. Only the release job has `contents: write`.
+Releases are built by `.github/workflows/release.yml` when a `vX.Y.Z` tag is pushed. The workflow checks that the tag matches `VERSION`, runs `mise run test`, packages a universal ad hoc signed archive with `Scripts/package-release.sh`, and publishes the ZIP and its `.sha256` file with `docs/release-notes.md` as the release notes. Only the release job has `contents: write`.
 
 ## Repository setup
 
@@ -14,10 +14,10 @@ Releases are built by `.github/workflows/release.yml` when a `vX.Y.Z` tag is pus
 2. Run the local gates, including the permission-dependent smoke tests that CI can't run:
 
    ```bash
-   make check
-   make smoke
-   make install
-   make hotkey-smoke
+   mise run check
+   mise run smoke
+   mise run install
+   mise run hotkey-smoke
    ```
 
 3. Inspect the installed app, capture history, clipboard modes, settings, permissions, icon, menu bar behavior, and Command-W handling.
@@ -39,7 +39,7 @@ A Developer ID release keeps permissions across updates and opens without the Ga
 ```bash
 OPEN_APPSHOT_SIGNING_IDENTITY="Developer ID Application: Example (TEAMID)" \
 OPEN_APPSHOT_NOTARY_PROFILE="open-appshot" \
-make package-release
+mise run package-release
 ```
 
 That path enables the hardened runtime, then notarizes, staples, and runs a Gatekeeper assessment before it writes the archive. Moving the release workflow to Developer ID requires storing the certificate and notary credentials as GitHub secrets. Never commit certificate material or App Store Connect credentials.

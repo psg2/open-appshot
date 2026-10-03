@@ -12,8 +12,8 @@
 
 ## Validation
 
-- `make check` —
-- `make smoke` (when capture behavior changed) —
+- `mise run check` —
+- `mise run smoke` (when capture behavior changed) —
 
 ## Visual evidence
 

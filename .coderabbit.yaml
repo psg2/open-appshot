@@ -20,7 +20,7 @@ reviews:
         This is a native macOS capture-only application. Flag changes that
         expand from observation into UI control, weaken capture file
         permissions, expose secure Accessibility values, or add network
-        access. Code must pass `make format-check` and compile with Swift
+        access. Code must pass `mise run lint:swift` and compile with Swift
         warnings treated as errors.
     - path: "Scripts/**"
       instructions: |

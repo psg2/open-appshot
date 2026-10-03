@@ -68,7 +68,7 @@ if [[ "$remove_data" -eq 1 ]]; then
   if [[ -x "$BUILT_BINARY" ]]; then
     helper_binary="$BUILT_BINARY"
   else
-    echo "Run 'make build' before removing data so ownership can be verified by the current sources" >&2
+    echo "Run 'mise run build' before removing data so ownership can be verified by the current sources" >&2
     exit 1
   fi
   "$helper_binary" --known-capture-roots-nul >"$ROOTS_FILE"
