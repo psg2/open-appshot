@@ -1,45 +1,42 @@
 # Contributing
 
-Thanks for helping improve Open AppShot. The project is intentionally capture-only: it observes a selected window but does not click, type, scroll, or invoke UI actions.
+Open AppShot only observes windows. It doesn't click, type, scroll, or trigger UI actions, and changes that add any of that need a design discussion first.
 
-## Development setup
+Keep capture, storage, and clipboard logic in `OpenAppShotCore` and presentation in the `OpenAppShot` app target.
 
-You need macOS 15 or later and Xcode 16 or later. Install the repository tools and Git hooks:
+## Setup
 
-```bash
-mise install
-mise run hooks
+You need macOS 15 or later, Xcode 16 or later, and [mise](https://mise.jdx.dev/):
+
+```sh
+mise install       # pinned Gitleaks, ShellCheck, actionlint, jq, and Lefthook
+mise run hooks     # pre-push hook that runs `mise run check`
 ```
-
-`mise install` uses the checked-in `mise.toml` to install pinned versions of Gitleaks, ShellCheck, actionlint, jq, and Lefthook. Open AppShot has no runtime package dependency.
 
 ## Before opening a pull request
 
-Run the publication gates that do not need macOS privacy permissions:
-
-```bash
+```sh
+mise run format
 mise run check
 ```
 
-When capture, clipboard, or hotkey behavior changes, also run:
+`check` runs lint, unit tests, the contract tests, and Gitleaks. It doesn't need macOS permissions, and CI runs the same gates.
 
-```bash
+When you change capture, clipboard, or shortcut behavior, also run the permission-dependent tests locally:
+
+```sh
 mise run smoke
-mise run install
-mise run hotkey-smoke
+mise run hotkey-smoke   # installs the current build first
 ```
 
-The smoke tests need Accessibility and Screen Recording permission. GitHub-hosted runners cannot grant those permissions, so CI runs the bundle and CLI contract suite instead.
-
-Normal ad hoc builds use a code-hash-bound identity. macOS may require renewed Accessibility and Screen Recording consent after code changes. The repository intentionally has no identifier-only signing mode. `mise run hotkey-smoke` installs the current build before testing it.
+Local builds are ad hoc signed, so macOS may ask for Accessibility and Screen Recording again after you rebuild.
 
 ## Conventions
 
-- Use English in code, comments, commits, issues, and pull requests.
-- Use Conventional Commit titles such as `feat:`, `fix:`, `docs:`, `ci:`, `refactor:`, and `test:`.
-- Keep pull requests focused and describe any effect on captured data, clipboard content, storage, permissions, or network behavior.
-- Run `mise run format` after changing Swift code.
-- Do not commit real captures, Accessibility output, credentials, or other private data.
-- Do not add UI-control behavior, telemetry, or network upload without an explicit design decision.
+- Write code, comments, commits, issues, and pull requests in English.
+- Use Conventional Commit messages such as `feat:`, `fix:`, `docs:`, `ci:`, `refactor:`, and `test:`.
+- Keep pull requests focused. Say whether the change affects captured data, clipboard content, storage, permissions, or network behavior.
+- Test behavior through the `OpenAppShotCore` interface, the built app, or its command-line entry point. Don't assert internal call order or source text.
+- Never commit real captures, Accessibility output, credentials, or other private data.
 
 Report security problems privately as described in [SECURITY.md](SECURITY.md).
