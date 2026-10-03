@@ -1,19 +1,25 @@
-## What
+## Why
 
-<!-- Explain what changes and why. Link the issue if there is one. -->
+<!-- The problem, with a link to the issue or discussion if there is one. -->
 
-## How to verify
+## What changed
 
-<!-- List commands run and include screenshots for visible UI changes. -->
+<!-- The resulting behavior and the main implementation decisions. -->
 
 ## Privacy and permissions
 
-<!-- Describe any change to captured data, clipboard output, storage, TCC permissions, or network behavior. -->
+<!-- Any change to captured data, clipboard output, storage, TCC permissions, or network behavior. Write "None" otherwise. -->
 
-## Checklist
+## Validation
 
-- [ ] `make check` passes
-- [ ] `make smoke` passes when capture behavior changed
-- [ ] The title follows Conventional Commits
-- [ ] Documentation reflects user-visible or configuration changes
-- [ ] No private capture data is included in fixtures, logs, or screenshots
+- `make check` —
+- `make smoke` (when capture behavior changed) —
+
+## Visual evidence
+
+<details>
+<summary>Show screenshots and recording</summary>
+
+</details>
+
+## Notes
