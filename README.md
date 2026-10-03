@@ -170,12 +170,19 @@ One pasteboard item advertises all representations for the selected mode. A rece
 
 ```text
 Package.swift                       Swift package manifest used by Scripts/build.sh
-Sources/OpenAppShot/AppModel.swift  History, permissions, storage, and UI state
-Sources/OpenAppShot/CaptureStorage.swift  Capture ownership and safe retention
-Sources/OpenAppShot/Views.swift     Native SwiftUI windows and settings
-Sources/OpenAppShot/ObservationModels.swift  Native observation result models
+Sources/OpenAppShot/main.swift      Entry point: command-line commands, then the app
+Sources/OpenAppShot/AppDelegate.swift  Menu bar, main menu, and global hotkey
+Sources/OpenAppShot/CommandLineInterface.swift  Command-line contract used by scripts and tests
+Sources/OpenAppShot/CaptureEngine.swift  Capture pipeline, staging, and context text
+Sources/OpenAppShot/ClipboardWriter.swift  Clipboard modes and pasteboard output
 Sources/OpenAppShot/NativeObservationEngine.swift  ScreenCaptureKit and AX capture
-Sources/OpenAppShot/main.swift      Capture storage, clipboard, menu bar, and hotkey
+Sources/OpenAppShot/ObservationModels.swift  Native observation result models
+Sources/OpenAppShot/CaptureStorage.swift  Capture ownership and safe retention
+Sources/OpenAppShot/CaptureHistory.swift  History loading, including legacy captures
+Sources/OpenAppShot/CapturePreferences.swift  User defaults and storage roots
+Sources/OpenAppShot/CaptureHotkey.swift  Hotkey model and validation
+Sources/OpenAppShot/AppModel.swift  Observable UI state and actions
+Sources/OpenAppShot/Views.swift     Native SwiftUI windows and settings
 Resources/Info.plist                Bundle identity and permission descriptions
 Resources/AppIcon.png               1024-pixel source for the native app icon
 CONTEXT.md                           Canonical capture and clipboard vocabulary
