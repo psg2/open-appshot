@@ -1,14 +1,14 @@
 import Foundation
 
-enum ClipboardMode: String, CaseIterable, Identifiable {
+public enum ClipboardMode: String, CaseIterable, Identifiable {
     case imageAndFullContext
     case imageAndReferences
     case imageOnly
     case accessibilityOnly
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var displayName: String {
+    public var displayName: String {
         switch self {
         case .imageAndFullContext: "Image + Full Accessibility"
         case .imageAndReferences: "Image + File References"
@@ -17,7 +17,7 @@ enum ClipboardMode: String, CaseIterable, Identifiable {
         }
     }
 
-    var detail: String {
+    public var detail: String {
         switch self {
         case .imageAndFullContext:
             "Screenshot, readable text for every captured element, and redacted structured context."
@@ -30,19 +30,19 @@ enum ClipboardMode: String, CaseIterable, Identifiable {
         }
     }
 
-    var includesImage: Bool {
+    public var includesImage: Bool {
         self != .accessibilityOnly
     }
 
-    var includesFullContext: Bool {
+    public var includesFullContext: Bool {
         self == .imageAndFullContext || self == .accessibilityOnly
     }
 
-    var includesFileReferences: Bool {
+    public var includesFileReferences: Bool {
         self == .imageAndReferences
     }
 
-    var includesStructuredContext: Bool {
+    public var includesStructuredContext: Bool {
         includesFullContext
     }
 }

@@ -2,6 +2,7 @@ import AppKit
 import ApplicationServices
 import Foundation
 import ImageIO
+import OpenAppShotCore
 import UniformTypeIdentifiers
 
 let appBundleIdentifier = "com.psg2.AppShotClipboardPOC"

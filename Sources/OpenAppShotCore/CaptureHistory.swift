@@ -1,7 +1,7 @@
 import Foundation
 
-enum CaptureHistory {
-    static func load() -> [CaptureRecord] {
+public enum CaptureHistory {
+    public static func load() -> [CaptureRecord] {
         var roots = CapturePreferences.knownCaptureRootURLs.map { ($0, false) }
         let legacy = CapturePreferences.legacyCaptureRootURL
         if !roots.contains(where: { $0.0.standardizedFileURL == legacy.standardizedFileURL }) {

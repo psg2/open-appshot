@@ -1,4 +1,5 @@
 import AppKit
+import OpenAppShotCore
 import SwiftUI
 
 final class MainWindowController: NSWindowController {

@@ -4,13 +4,13 @@ import Foundation
 import ImageIO
 import UniformTypeIdentifiers
 
-enum AppShotError: LocalizedError {
+public enum AppShotError: LocalizedError {
     case noTargetApplication
     case commandFailed(String)
     case missingScreenshot
     case invalidArguments(String)
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .noTargetApplication:
             return "No frontmost application is available."
@@ -24,29 +24,29 @@ enum AppShotError: LocalizedError {
     }
 }
 
-struct Snapshot {
-    let id: String
-    let capturedAt: Date
-    let directoryURL: URL
-    let screenshotURL: URL
-    let accessibilityURL: URL
-    let contextURL: URL
-    let contextText: String
-    let accessibilityJSON: Data
-    let appName: String
-    let windowTitle: String
-    let elementCount: Int
-    let captureStrategy: String
+public struct Snapshot {
+    public let id: String
+    public let capturedAt: Date
+    public let directoryURL: URL
+    public let screenshotURL: URL
+    public let accessibilityURL: URL
+    public let contextURL: URL
+    public let contextText: String
+    public let accessibilityJSON: Data
+    public let appName: String
+    public let windowTitle: String
+    public let elementCount: Int
+    public let captureStrategy: String
 }
 
-final class CaptureEngine {
+public final class CaptureEngine {
     private let fileManager = FileManager.default
     private let baseDirectory: URL
     private let retentionRoots: [URL]
     private let retentionDays: Int
     private let observationEngine: NativeObservationEngine
 
-    init(
+    public init(
         baseDirectory: URL = CapturePreferences.captureRootURL,
         retentionRoots: [URL] = CapturePreferences.knownCaptureRootURLs,
         retentionDays: Int = CapturePreferences.retentionDays,
@@ -61,7 +61,7 @@ final class CaptureEngine {
         self.observationEngine = observationEngine
     }
 
-    func capture(application: NSRunningApplication) throws -> Snapshot {
+    public func capture(application: NSRunningApplication) throws -> Snapshot {
         try CaptureStorage.prepareRoot(baseDirectory, fileManager: fileManager)
         try CaptureStorage.removeExpiredCaptures(
             at: baseDirectory,

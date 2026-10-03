@@ -4,10 +4,10 @@ import Foundation
 import ImageIO
 import UniformTypeIdentifiers
 
-let customContextType = NSPasteboard.PasteboardType("com.psg2.appshot-context-json")
+public let customContextType = NSPasteboard.PasteboardType("com.psg2.appshot-context-json")
 
-enum ClipboardWriter {
-    static func copy(_ snapshot: Snapshot, mode: ClipboardMode) throws {
+public enum ClipboardWriter {
+    public static func copy(_ snapshot: Snapshot, mode: ClipboardMode) throws {
         let item = NSPasteboardItem()
 
         if mode.includesImage {
@@ -27,15 +27,15 @@ enum ClipboardWriter {
         write(item)
     }
 
-    static func copyScreenshot(_ snapshot: Snapshot) throws {
+    public static func copyScreenshot(_ snapshot: Snapshot) throws {
         try copy(snapshot, mode: .imageOnly)
     }
 
-    static func copyContext(_ snapshot: Snapshot) throws {
+    public static func copyContext(_ snapshot: Snapshot) throws {
         try copy(snapshot, mode: .accessibilityOnly)
     }
 
-    static func describeClipboard() -> String {
+    public static func describeClipboard() -> String {
         let pasteboard = NSPasteboard.general
         let types = pasteboard.types?.map(\.rawValue).sorted() ?? []
         let pngBytes = pasteboard.data(forType: .png)?.count ?? 0
@@ -49,7 +49,7 @@ enum ClipboardWriter {
         ].joined(separator: "\n")
     }
 
-    static func clipboardText() -> String {
+    public static func clipboardText() -> String {
         NSPasteboard.general.string(forType: .string) ?? ""
     }
 

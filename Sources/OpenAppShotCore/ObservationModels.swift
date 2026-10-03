@@ -1,13 +1,13 @@
 import Foundation
 
-struct ObservationResult {
-    let window: ObservedWindow
-    let elements: [ObservedElement]
-    let truncation: ObservationTruncation
-    let captureStrategy: String
-    let diagnosticURLs: [URL]
+public struct ObservationResult {
+    public let window: ObservedWindow
+    public let elements: [ObservedElement]
+    public let truncation: ObservationTruncation
+    public let captureStrategy: String
+    public let diagnosticURLs: [URL]
 
-    func accessibilityJSON() throws -> Data {
+    public func accessibilityJSON() throws -> Data {
         let document = AccessibilityDocument(
             success: true,
             data: AccessibilityPayload(
@@ -25,56 +25,56 @@ struct ObservationResult {
     }
 }
 
-struct ObservedWindow: Codable {
-    let id: Int
-    let title: String
-    let bounds: ObservedBounds
+public struct ObservedWindow: Codable {
+    public let id: Int
+    public let title: String
+    public let bounds: ObservedBounds
 }
 
-struct ObservedBounds: Codable, Equatable {
-    let x: Double
-    let y: Double
-    let width: Double
-    let height: Double
+public struct ObservedBounds: Codable, Equatable {
+    public let x: Double
+    public let y: Double
+    public let width: Double
+    public let height: Double
 
-    init(_ rectangle: CGRect) {
+    public init(_ rectangle: CGRect) {
         x = rectangle.origin.x
         y = rectangle.origin.y
         width = rectangle.size.width
         height = rectangle.size.height
     }
 
-    init(x: Double, y: Double, width: Double, height: Double) {
+    public init(x: Double, y: Double, width: Double, height: Double) {
         self.x = x
         self.y = y
         self.width = width
         self.height = height
     }
 
-    var rectangle: CGRect {
+    public var rectangle: CGRect {
         CGRect(x: x, y: y, width: width, height: height)
     }
 }
 
-struct ObservedElement: Codable {
-    let index: Int
-    let parentIndex: Int?
-    let depth: Int
-    let role: String
-    let subrole: String?
-    let label: String?
-    let title: String?
-    let value: String?
-    let elementDescription: String?
-    let help: String?
-    let bounds: ObservedBounds?
-    let isSecure: Bool
-    let isActionable: Bool
-    let isEnabled: Bool?
-    let isFocused: Bool?
-    let actions: [String]
+public struct ObservedElement: Codable {
+    public let index: Int
+    public let parentIndex: Int?
+    public let depth: Int
+    public let role: String
+    public let subrole: String?
+    public let label: String?
+    public let title: String?
+    public let value: String?
+    public let elementDescription: String?
+    public let help: String?
+    public let bounds: ObservedBounds?
+    public let isSecure: Bool
+    public let isActionable: Bool
+    public let isEnabled: Bool?
+    public let isFocused: Bool?
+    public let actions: [String]
 
-    enum CodingKeys: String, CodingKey {
+    public enum CodingKeys: String, CodingKey {
         case index
         case parentIndex = "parent_index"
         case depth
@@ -94,15 +94,15 @@ struct ObservedElement: Codable {
     }
 }
 
-struct ObservationTruncation: Codable {
-    var maxDepthReached = false
-    var maxElementCountReached = false
-    var maxChildrenPerNodeReached = false
-    var deadlineReached = false
-    var incompleteAccessibilityRead = false
-    var reason: String?
+public struct ObservationTruncation: Codable {
+    public var maxDepthReached = false
+    public var maxElementCountReached = false
+    public var maxChildrenPerNodeReached = false
+    public var deadlineReached = false
+    public var incompleteAccessibilityRead = false
+    public var reason: String?
 
-    init(
+    public init(
         maxDepthReached: Bool = false,
         maxElementCountReached: Bool = false,
         maxChildrenPerNodeReached: Bool = false,
@@ -118,7 +118,7 @@ struct ObservationTruncation: Codable {
         self.reason = reason
     }
 
-    enum CodingKeys: String, CodingKey {
+    public enum CodingKeys: String, CodingKey {
         case maxDepthReached = "max_depth_reached"
         case maxElementCountReached = "max_element_count_reached"
         case maxChildrenPerNodeReached = "max_children_per_node_reached"
@@ -127,7 +127,7 @@ struct ObservationTruncation: Codable {
         case reason
     }
 
-    var isIncomplete: Bool {
+    public var isIncomplete: Bool {
         maxDepthReached || maxElementCountReached || maxChildrenPerNodeReached || deadlineReached || incompleteAccessibilityRead
     }
 }
@@ -155,14 +155,14 @@ private struct AccessibilityPayload: Codable {
     }
 }
 
-enum ObservationEngineError: LocalizedError {
+public enum ObservationEngineError: LocalizedError {
     case noWindow(String)
     case ambiguousWindow(String)
     case screenCaptureTimedOut
     case screenCaptureFailed(String)
     case missingScreenshot
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .noWindow(let appName):
             return "No capturable window was found for \(appName)."

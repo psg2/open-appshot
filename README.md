@@ -52,7 +52,7 @@ The main commands are:
 ```sh
 make format        # rewrite Swift sources with swift-format
 make lint          # swift-format, ShellCheck, actionlint, and plist checks
-make test          # CI-safe bundle and command-line contract tests
+make test          # unit tests, then CI-safe bundle and command-line contract tests
 make scan-secrets  # full-history Gitleaks scan
 make check         # all publication gates above
 ```
@@ -173,20 +173,22 @@ Package.swift                       Swift package manifest used by Scripts/build
 Sources/OpenAppShot/main.swift      Entry point: command-line commands, then the app
 Sources/OpenAppShot/AppDelegate.swift  Menu bar, main menu, and global hotkey
 Sources/OpenAppShot/CommandLineInterface.swift  Command-line contract used by scripts and tests
-Sources/OpenAppShot/CaptureEngine.swift  Capture pipeline, staging, and context text
-Sources/OpenAppShot/ClipboardWriter.swift  Clipboard modes and pasteboard output
-Sources/OpenAppShot/NativeObservationEngine.swift  ScreenCaptureKit and AX capture
-Sources/OpenAppShot/ObservationModels.swift  Native observation result models
-Sources/OpenAppShot/CaptureStorage.swift  Capture ownership and safe retention
-Sources/OpenAppShot/CaptureHistory.swift  History loading, including legacy captures
-Sources/OpenAppShot/CapturePreferences.swift  User defaults and storage roots
-Sources/OpenAppShot/CaptureHotkey.swift  Hotkey model and validation
+Sources/OpenAppShotCore/CaptureEngine.swift  Capture pipeline, staging, and context text
+Sources/OpenAppShotCore/ClipboardWriter.swift  Clipboard modes and pasteboard output
+Sources/OpenAppShotCore/NativeObservationEngine.swift  ScreenCaptureKit and AX capture
+Sources/OpenAppShotCore/ObservationModels.swift  Native observation result models
+Sources/OpenAppShotCore/CaptureStorage.swift  Capture ownership and safe retention
+Sources/OpenAppShotCore/CaptureHistory.swift  History loading, including legacy captures
+Sources/OpenAppShotCore/CapturePreferences.swift  User defaults and storage roots
+Sources/OpenAppShotCore/CaptureHotkey.swift  Hotkey model and validation
+Sources/OpenAppShotCore/WindowMatching.swift  Pairs captured windows with Accessibility windows
 Sources/OpenAppShot/AppModel.swift  Observable UI state and actions
 Sources/OpenAppShot/Views.swift     Native SwiftUI windows and settings
 Resources/Info.plist                Bundle identity and permission descriptions
 Resources/AppIcon.png               1024-pixel source for the native app icon
 CONTEXT.md                           Canonical capture and clipboard vocabulary
 Scripts/                            Build, install, and observable smoke tests
+Tests/OpenAppShotCoreTests/         Unit tests for the OpenAppShotCore library
 Tests/Fixtures/                     Deterministic capture target
 Tests/Support/                      Synthetic configurable-hotkey event
 docs/                               Architecture and prototype findings
