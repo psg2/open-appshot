@@ -25,6 +25,8 @@ codesign --verify --deep --strict "$APP_PATH"
 [[ "$(plutil -extract CFBundlePackageType raw "$INFO_PLIST")" == "APPL" ]]
 [[ "$(plutil -extract LSUIElement raw "$INFO_PLIST")" == "true" ]]
 [[ "$(plutil -extract LSMinimumSystemVersion raw "$INFO_PLIST")" == "15.0" ]]
+version=$(tr -d '[:space:]' <"$REPO_ROOT/VERSION")
+[[ "$(plutil -extract CFBundleShortVersionString raw "$INFO_PLIST")" == "$version" ]]
 
 deployment_target=$(vtool -show-build "$BINARY" | awk '/minos/ { print $2; exit }')
 [[ "$deployment_target" == "15.0" ]]
@@ -116,13 +118,25 @@ grep -Fxq "$capture_root" <<<"$known_roots"
 
 mkdir -p "$REPO_ROOT/build/release"
 printf 'stale\n' >"$REPO_ROOT/build/release/stale-artifact"
-if env -u OPEN_APPSHOT_SIGNING_IDENTITY -u OPEN_APPSHOT_NOTARY_PROFILE \
+if env -u OPEN_APPSHOT_SIGNING_IDENTITY -u OPEN_APPSHOT_NOTARY_PROFILE -u OPEN_APPSHOT_RELEASE_SIGNING \
   "$SCRIPT_DIR/package-release.sh" >"$TEMP_DIR/package.stdout" 2>"$TEMP_DIR/package.stderr"; then
   echo "Release packaging unexpectedly ran without signing credentials" >&2
   exit 1
 fi
 grep -Fq 'OPEN_APPSHOT_SIGNING_IDENTITY' "$TEMP_DIR/package.stderr"
 [[ ! -e "$REPO_ROOT/build/release/stale-artifact" ]]
+
+env -u OPEN_APPSHOT_SIGNING_IDENTITY -u OPEN_APPSHOT_NOTARY_PROFILE OPEN_APPSHOT_RELEASE_SIGNING=adhoc \
+  "$SCRIPT_DIR/package-release.sh" >"$TEMP_DIR/package-adhoc.stdout"
+grep -Fxq 'signing=adhoc' "$TEMP_DIR/package-adhoc.stdout"
+release_archive="OpenAppShot-$version-macos-universal.zip"
+(cd "$REPO_ROOT/build/release" && shasum -a 256 -c "$release_archive.sha256" >/dev/null)
+ditto -x -k "$REPO_ROOT/build/release/$release_archive" "$TEMP_DIR/release-app"
+release_app="$TEMP_DIR/release-app/Open AppShot.app"
+codesign --verify --deep --strict "$release_app"
+[[ "$(plutil -extract CFBundleShortVersionString raw "$release_app/Contents/Info.plist")" == "$version" ]]
+release_architectures=$(lipo -archs "$release_app/Contents/MacOS/OpenAppShot")
+[[ "$release_architectures" == *"arm64"* && "$release_architectures" == *"x86_64"* ]]
 "$SCRIPT_DIR/uninstall-local.sh" --help >/dev/null
 
 printf 'bundle=%s\n' "$APP_PATH"
@@ -131,6 +145,7 @@ printf 'deployment_target=%s\n' "$deployment_target"
 printf 'architectures=%s\n' "$architectures"
 printf 'retention_policy=GREEN\n'
 printf 'release_fail_closed=GREEN\n'
+printf 'release_adhoc_archive=GREEN\n'
 printf 'isolated_release_build=GREEN\n'
 printf 'cli_contracts=GREEN\n'
 printf 'test=GREEN\n'

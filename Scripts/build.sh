@@ -7,6 +7,11 @@ BUILD_ROOT="${OPEN_APPSHOT_BUILD_ROOT:-$REPO_ROOT/build}"
 APP_PATH="$BUILD_ROOT/Open AppShot.app"
 LEGACY_APP_PATH="$BUILD_ROOT/AppShot Clipboard POC.app"
 DEPLOYMENT_TARGET="${OPEN_APPSHOT_DEPLOYMENT_TARGET:-15.0}"
+VERSION="$(tr -d '[:space:]' <"$REPO_ROOT/VERSION")"
+if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "VERSION must contain a semantic version such as 1.2.3" >&2
+  exit 1
+fi
 ARCHITECTURES="${OPEN_APPSHOT_ARCHITECTURES:-arm64 x86_64}"
 SIGNING_IDENTITY="${OPEN_APPSHOT_SIGNING_IDENTITY:--}"
 mkdir -p "$BUILD_ROOT"
@@ -76,6 +81,7 @@ else
 fi
 
 cp "$REPO_ROOT/Resources/Info.plist" "$STAGED_APP/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$STAGED_APP/Contents/Info.plist"
 cp "$STAGING_ROOT/AppIcon.icns" "$STAGED_APP/Contents/Resources/AppIcon.icns"
 signing_arguments=(--force --deep --sign "$SIGNING_IDENTITY")
 if [[ "$SIGNING_IDENTITY" != "-" ]]; then

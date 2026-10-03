@@ -1,33 +1,40 @@
 # Releasing Open AppShot
 
-The repository is prepared for continuous integration. Public release publication is intentionally not connected to GitHub yet, but the local release packager fails closed unless Developer ID and notary credentials are configured.
+Releases are built by `.github/workflows/release.yml` when a `vX.Y.Z` tag is pushed. The workflow checks that the tag matches `VERSION`, runs `make test`, packages a universal ad hoc signed archive with `Scripts/package-release.sh`, and publishes the ZIP and its `.sha256` file with `docs/release-notes.md` as the release notes. Only the release job has `contents: write`.
 
-## One-time repository setup
+## Repository setup
 
-Before making the repository public:
+1. Require the `Secrets Scan`, `Format · Lint · Build · Test`, `Minimum macOS 15 (macos-15)`, and `Minimum macOS 15 (macos-15-intel)` checks on `main`.
+2. Enable private vulnerability reporting and Dependabot security alerts.
+3. On every machine that used the POC, run `./Scripts/uninstall-local.sh --reset-permissions` before granting permissions to a release build.
 
-1. Confirm the checked-in MIT License remains the intended license.
-2. Add the GitHub remote and push `main`.
-3. Enable branch protection with the `Secrets Scan`, `Format · Lint · Build · Test`, and `Minimum macOS 15 (macos-15)`, and `Minimum macOS 15 (macos-15-intel)` checks required.
-4. Enable private vulnerability reporting and Dependabot security alerts.
-5. Install CodeRabbit if it should review pull requests. Dependabot opens monthly GitHub Actions updates without extra setup.
-6. Confirm that the legacy bundle identifier remains acceptable or plan a documented TCC permission migration.
-7. On every machine used by the POC, run `./Scripts/uninstall-local.sh --reset-permissions` before granting permissions to a Developer ID release.
+## Release checklist
 
-## Release checks
+1. Update `VERSION` and `docs/release-notes.md`. Increase `CFBundleVersion` in `Resources/Info.plist`. `Scripts/build.sh` sets `CFBundleShortVersionString` from `VERSION`.
+2. Run the local gates, including the permission-dependent smoke tests that CI can't run:
 
-Update `CFBundleShortVersionString` and `CFBundleVersion` in `Resources/Info.plist`, then run the source and local-development checks:
+   ```bash
+   make check
+   make smoke
+   make install
+   make hotkey-smoke
+   ```
 
-```bash
-make check
-make smoke
-make install
-make hotkey-smoke
-```
+3. Inspect the installed app, capture history, clipboard modes, settings, permissions, icon, menu bar behavior, and Command-W handling.
+4. Merge the version change, then tag the merge commit and push the tag:
 
-Inspect the installed app, capture history, clipboard modes, settings, permissions, icon, menu bar behavior, and Command-W handling.
+   ```bash
+   git tag vX.Y.Z
+   git push origin vX.Y.Z
+   ```
 
-For a public binary, create a notarytool keychain profile and run:
+To rerun a failed release for an existing tag, start the Release workflow manually with that tag.
+
+## Signing
+
+Ad hoc releases are not notarized. Users approve the first launch under **Privacy & Security > Open Anyway**. macOS ties Accessibility and Screen Recording grants to the exact ad hoc binary, so users grant both again after every update.
+
+A Developer ID release keeps permissions across updates and opens without the Gatekeeper exception. It needs an Apple Developer Program team, a Developer ID Application certificate, and a notarytool keychain profile. Build it locally with:
 
 ```bash
 OPEN_APPSHOT_SIGNING_IDENTITY="Developer ID Application: Example (TEAMID)" \
@@ -35,18 +42,4 @@ OPEN_APPSHOT_NOTARY_PROFILE="open-appshot" \
 make package-release
 ```
 
-The command clears stale release output before building, then produces a versioned universal notarized ZIP and portable SHA-256 checksum under `build/release`. It moves those files into place only after notarization, stapling, Gatekeeper assessment, and checksum generation succeed.
-
-## Distribution signing
-
-A distributable release needs:
-
-- an Apple Developer Program team;
-- a Developer ID Application certificate;
-- hardened runtime and an explicit entitlements review;
-- `codesign` with the Developer ID identity;
-- notarization with `notarytool`;
-- stapling and Gatekeeper verification;
-- a release archive and checksums.
-
-Add a release workflow only after the signing identity, GitHub secret storage, artifact publication policy, and bundle identifier migration are decided. Never place certificate material or App Store Connect credentials in the repository.
+That path enables the hardened runtime, then notarizes, staples, and runs a Gatekeeper assessment before it writes the archive. Moving the release workflow to Developer ID requires storing the certificate and notary credentials as GitHub secrets. Never commit certificate material or App Store Connect credentials.

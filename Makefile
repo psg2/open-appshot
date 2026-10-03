@@ -57,7 +57,7 @@ smoke: build ## Exercise the native capture and clipboard behavior (requires mac
 hotkey-smoke: install ## Install current sources and exercise the global hotkey (requires permissions)
 	./Scripts/hotkey-smoke-test.sh
 
-package-release: ## Build, sign, notarize, and package a universal release
+package-release: ## Package a universal release (Developer ID, or OPEN_APPSHOT_RELEASE_SIGNING=adhoc)
 	./Scripts/package-release.sh
 
 clean: ## Remove generated build artifacts

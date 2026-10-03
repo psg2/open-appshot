@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Until tagged releases exist, only the current `main` branch receives security fixes.
+Only the latest GitHub release and the current `main` branch receive security fixes.
 
 ## Reporting a vulnerability
 

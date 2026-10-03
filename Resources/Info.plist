@@ -18,8 +18,9 @@
     <string>Open AppShot</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
+    <!-- Scripts/build.sh replaces this with the contents of VERSION. -->
     <key>CFBundleShortVersionString</key>
-    <string>0.5.0</string>
+    <string>0.0.0</string>
     <key>CFBundleVersion</key>
     <string>9</string>
     <key>LSMinimumSystemVersion</key>
