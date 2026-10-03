@@ -33,9 +33,17 @@ run = "plutil -lint Resources/Info.plist"
 description = "Run static checks"
 depends = ["lint:*"]
 
+[tasks."test:unit"]
+description = "Run the OpenAppShotCore unit tests"
+run = "swift test"
+
+[tasks."test:app"]
+description = "Build the bundle and run the bundle, release, and command-line contract tests"
+run = "./Scripts/test-app.sh"
+
 [tasks.test]
 description = "Run unit tests, then the bundle and command-line contract tests"
-run = ["swift test", "./Scripts/test.sh"]
+run = ["mise run test:unit", "mise run test:app"]
 
 [tasks.ci]
 description = "Run the same quality gates as GitHub Actions"
@@ -52,6 +60,10 @@ depends = ["ci", "scan-secrets"]
 [tasks.build]
 description = "Build and ad hoc sign the app bundle"
 run = "./Scripts/build.sh"
+
+[tasks.run]
+description = "Build the app and open it from build/; extra arguments go to the app"
+run = "./Scripts/run.sh"
 
 [tasks.install]
 description = "Install the current build in /Applications"

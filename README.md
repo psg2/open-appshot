@@ -116,7 +116,8 @@ mise run install   # build and copy to /Applications
 | --- | --- |
 | `format` | Rewrite Swift sources with swift-format |
 | `lint` | swift-format, ShellCheck, actionlint, and plist checks |
-| `test` | Unit tests, then the bundle and command-line contract tests |
+| `run` | Build and open the app from `build/`. Arguments after `--` go to the app |
+| `test` | `test:unit` (Swift Testing), then `test:app` (bundle, release, and command-line contracts) |
 | `scan-secrets` | Gitleaks on the working tree and the full history |
 | `check` | All of the above. CI runs the same gates |
 | `smoke` | Capture a fixture window and check every clipboard mode |
