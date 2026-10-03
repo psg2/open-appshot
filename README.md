@@ -117,7 +117,8 @@ Open Settings with Command-comma to:
 - choose a capture folder;
 - keep captures for 1, 7, 30, or 90 days, or forever;
 - choose whether Delete and the trash button ask for confirmation;
-- control automatic clipboard copy and choose its content.
+- control automatic clipboard copy and choose its content;
+- open Open AppShot at login. A launch at login starts in the menu bar without opening the window.
 
 ## Storage and privacy
 

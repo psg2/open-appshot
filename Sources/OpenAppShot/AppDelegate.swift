@@ -29,6 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private var rightOptionDown = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        let launchedAsLoginItem = LoginItem.launchedAsLoginItem
         lastExternalApplication = externalApplication(NSWorkspace.shared.frontmostApplication)
         NSApp.setActivationPolicy(.accessory)
         model.captureAction = { [weak self] in self?.triggerCapture() }
@@ -49,7 +50,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         installHotkeyMonitor()
         updatePermissionStatus()
         restoreLatestSnapshot()
-        showMainWindow()
+        if !launchedAsLoginItem {
+            showMainWindow()
+        }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -486,6 +489,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         settingsWindowController.window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         model.refreshPermissions()
+        model.refreshOpenAtLogin()
     }
 
     @objc private func closeKeyWindow() {

@@ -29,6 +29,7 @@ final class AppModel: ObservableObject {
     @Published var captureSound = CapturePreferences.captureSound {
         didSet { CapturePreferences.captureSound = captureSound }
     }
+    @Published private(set) var openAtLogin = LoginItem.isEnabled
     @Published var confirmBeforeDeleting = CapturePreferences.confirmBeforeDeleting {
         didSet {
             CapturePreferences.confirmBeforeDeleting = confirmBeforeDeleting
@@ -204,6 +205,22 @@ final class AppModel: ObservableObject {
         CapturePreferences.selectStorageContainer(nil)
         storageURL = CapturePreferences.captureRootURL
         reloadHistory()
+    }
+
+    func setOpenAtLogin(_ enabled: Bool) {
+        do {
+            try LoginItem.setEnabled(enabled)
+        } catch {
+            statusMessage = "Could not change Open at Login: \(error.localizedDescription)"
+        }
+        refreshOpenAtLogin()
+    }
+
+    func refreshOpenAtLogin() {
+        openAtLogin = LoginItem.isEnabled
+        if LoginItem.requiresApproval {
+            statusMessage = "Allow Open AppShot in System Settings > General > Login Items"
+        }
     }
 
     func resetCaptureHotkey() {
