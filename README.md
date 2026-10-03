@@ -2,11 +2,29 @@
 
 Open AppShot captures the last active macOS window as pixels and Accessibility context. It keeps a local history and writes both representations to the clipboard for use in any chat or agent UI.
 
-Version 0.5.0 installs as a universal `Open AppShot.app` for Apple Silicon and Intel Macs. It has configurable clipboard modes, global and in-app shortcuts, capture history, safe retention, and a configurable deletion confirmation. Command-W closes the window without quitting the capture service. The app remains capture-only. It cannot click, type, scroll, or invoke UI actions.
+Open AppShot installs as a universal `Open AppShot.app` for Apple Silicon and Intel Macs. It has configurable clipboard modes, global and in-app shortcuts, capture history, safe retention, and a configurable deletion confirmation. Command-W closes the window without quitting the capture service. The app remains capture-only. It cannot click, type, scroll, or invoke UI actions.
 
-The installed bundle and executable are named Open AppShot. The app currently keeps the legacy bundle identifier `com.psg2.AppShotClipboardPOC`. A Mac that granted permissions to an early identifier-only development build must reset those grants before using a distributable Developer ID build; see [Reset migrated permissions](#reset-migrated-permissions).
+The installed bundle and executable are named Open AppShot. The app currently keeps the legacy bundle identifier `com.psg2.AppShotClipboardPOC`. A Mac that granted permissions to an early identifier-only development build must reset those grants before using a release build; see [Reset migrated permissions](#reset-migrated-permissions).
 
-## Requirements
+## Install a release
+
+1. Download `OpenAppShot-X.Y.Z-macos-universal.zip` and its `.sha256` file from the same [GitHub release](https://github.com/psg2/open-appshot/releases/latest).
+2. In the download folder, verify the archive before extracting it:
+
+   ```sh
+   shasum -a 256 -c OpenAppShot-X.Y.Z-macos-universal.zip.sha256
+   ```
+
+   The result must end in `OK`. This checks the archive against the published checksum. It isn't Apple notarization.
+3. Unzip the archive and move **Open AppShot.app** to Applications.
+4. Open the app. Releases are ad hoc signed, not Developer ID signed or notarized, so macOS blocks the first launch. Open **System Settings > Privacy & Security**, find the message about Open AppShot, and choose **Open Anyway**. Apple describes this in [Open a Mac app from an unknown developer](https://support.apple.com/en-us/102445). Keep Gatekeeper enabled.
+5. Grant Accessibility and Screen Recording as described in [First run](#first-run).
+
+macOS ties Accessibility and Screen Recording grants to the exact ad hoc signed binary. After installing a new version, remove the old Open AppShot entries in **Privacy & Security** and grant both permissions again. `./Scripts/uninstall-local.sh --reset-permissions` resets them from a source checkout.
+
+## Build from source
+
+### Requirements
 
 - macOS 15 or later
 - Xcode 16 or later with Swift
@@ -18,7 +36,7 @@ Install the repository quality tools:
 make setup
 ```
 
-## Build and install
+### Build and install
 
 ```sh
 make build
@@ -193,6 +211,8 @@ Tests/Fixtures/                     Deterministic capture target
 Tests/Support/                      Synthetic configurable-hotkey event
 docs/                               Architecture and prototype findings
 .github/workflows/ci.yml            Secret scanning and macOS quality gates
+.github/workflows/release.yml       Tag-triggered universal release with checksum
+VERSION                             Release version used by the build and release workflow
 mise.toml                           Pinned local and CI quality tools
 lefthook.yml                        Local pre-push quality gates
 ```
@@ -203,6 +223,6 @@ Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the current boundaries, [d
 
 - CI, local hooks, formatting, linting, contract tests, Gitleaks, issue templates, and security guidance are ready.
 - The source is available under the MIT License.
-- The repository is still local; no Git remote is configured.
+- The repository is hosted at [psg2/open-appshot](https://github.com/psg2/open-appshot).
 - Normal local builds use a code-hash-bound ad hoc identity. The repository has no weak identifier-only signing mode.
-- `make package-release` provides a fail-closed universal Developer ID, hardened-runtime, notarization, stapling, versioned archive, and portable checksum path once signing credentials are configured.
+- Pushing a `vX.Y.Z` tag publishes a universal ad hoc signed release with a SHA-256 checksum. `make package-release` also supports Developer ID signing and notarization once credentials exist; see [docs/RELEASING.md](docs/RELEASING.md).
