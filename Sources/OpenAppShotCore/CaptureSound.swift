@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 
-enum CaptureSound: String, CaseIterable, Identifiable {
+public enum CaptureSound: String, CaseIterable, Identifiable {
     case none = ""
     case glass = "Glass"
     case hero = "Hero"
@@ -11,10 +11,10 @@ enum CaptureSound: String, CaseIterable, Identifiable {
     case submarine = "Submarine"
     case tink = "Tink"
 
-    var id: String { rawValue }
-    var displayName: String { self == .none ? "None" : rawValue }
+    public var id: String { rawValue }
+    public var displayName: String { self == .none ? "None" : rawValue }
 
-    func play() {
+    public func play() {
         guard self != .none else { return }
         NSSound(named: rawValue)?.play()
     }

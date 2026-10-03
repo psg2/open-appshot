@@ -30,7 +30,8 @@ lint-plist: ## Validate the application property list
 
 lint: format-check lint-shell lint-actions lint-plist ## Run static checks
 
-test: ## Run CI-safe bundle and CLI contract tests
+test: ## Run unit tests and CI-safe bundle and CLI contract tests
+	swift test
 	./Scripts/test.sh
 
 ci: lint test ## Run the same quality gates as GitHub Actions

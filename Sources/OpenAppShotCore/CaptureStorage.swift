@@ -1,7 +1,7 @@
 import Foundation
 
-enum CaptureStorage {
-    static let markerFilename = ".open-appshot-capture"
+public enum CaptureStorage {
+    public static let markerFilename = ".open-appshot-capture"
 
     private struct Marker: Codable {
         let createdAt: Date
@@ -12,13 +12,13 @@ enum CaptureStorage {
         let capturedAt: Date
     }
 
-    static func isCaptureDirectoryName(_ name: String) -> Bool {
+    public static func isCaptureDirectoryName(_ name: String) -> Bool {
         let pattern =
             #"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}-[0-9]{2}-[0-9]{2}Z-[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"#
         return name.range(of: pattern, options: .regularExpression) != nil
     }
 
-    static func hasOwnershipMarker(_ directory: URL) -> Bool {
+    public static func hasOwnershipMarker(_ directory: URL) -> Bool {
         guard isCaptureDirectoryName(directory.lastPathComponent) else { return false }
         let markerURL = directory.appendingPathComponent(markerFilename)
         let decoder = JSONDecoder()
@@ -27,7 +27,7 @@ enum CaptureStorage {
         return (try? decoder.decode(Marker.self, from: data)) != nil
     }
 
-    static func hasStagingOwnershipMarker(_ directory: URL) -> Bool {
+    public static func hasStagingOwnershipMarker(_ directory: URL) -> Bool {
         let name = directory.lastPathComponent
         guard name.hasPrefix(".staging-"), UUID(uuidString: String(name.dropFirst(".staging-".count))) != nil else {
             return false
@@ -35,7 +35,7 @@ enum CaptureStorage {
         return markerDate(in: directory) != nil
     }
 
-    static func hasVerifiedLegacyLayout(_ directory: URL, fileManager: FileManager = .default) -> Bool {
+    public static func hasVerifiedLegacyLayout(_ directory: URL, fileManager: FileManager = .default) -> Bool {
         guard isCaptureDirectoryName(directory.lastPathComponent),
             let context = try? String(
                 contentsOf: directory.appendingPathComponent("context.md"),
@@ -55,7 +55,7 @@ enum CaptureStorage {
         return metadata.id == directory.lastPathComponent
     }
 
-    static func prepareRoot(_ root: URL, fileManager: FileManager = .default) throws {
+    public static func prepareRoot(_ root: URL, fileManager: FileManager = .default) throws {
         try fileManager.createDirectory(
             at: root,
             withIntermediateDirectories: true,
@@ -64,7 +64,7 @@ enum CaptureStorage {
         try fileManager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: root.path)
     }
 
-    static func createStagingDirectory(
+    public static func createStagingDirectory(
         at root: URL,
         capturedAt: Date,
         fileManager: FileManager = .default
@@ -87,7 +87,7 @@ enum CaptureStorage {
     }
 
     @discardableResult
-    static func removeExpiredCaptures(
+    public static func removeExpiredCaptures(
         at root: URL,
         retentionDays: Int,
         now: Date = Date(),
@@ -119,7 +119,7 @@ enum CaptureStorage {
     }
 
     @discardableResult
-    static func purgeOwnedCaptures(at root: URL, fileManager: FileManager = .default) throws -> [URL] {
+    public static func purgeOwnedCaptures(at root: URL, fileManager: FileManager = .default) throws -> [URL] {
         guard fileManager.fileExists(atPath: root.path) else { return [] }
         let children = try fileManager.contentsOfDirectory(
             at: root,

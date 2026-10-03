@@ -1,4 +1,5 @@
 import AppKit
+import OpenAppShotCore
 
 runCommandLineCommand(CommandLine.arguments)
 

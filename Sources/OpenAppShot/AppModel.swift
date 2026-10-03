@@ -2,6 +2,7 @@ import AppKit
 import ApplicationServices
 import Combine
 import Foundation
+import OpenAppShotCore
 
 final class AppModel: ObservableObject {
     @Published private(set) var captures: [CaptureRecord] = []

@@ -1,47 +1,47 @@
 import AppKit
 import Foundation
 
-struct CaptureHotkey: Codable, Equatable {
-    enum Kind: String, Codable {
+public struct CaptureHotkey: Codable, Equatable {
+    public enum Kind: String, Codable {
         case dualOption
         case keyboard
     }
 
-    let kind: Kind
-    let keyCode: UInt16?
-    let modifierRawValue: UInt
-    let keyDisplay: String?
+    public let kind: Kind
+    public let keyCode: UInt16?
+    public let modifierRawValue: UInt
+    public let keyDisplay: String?
 
-    static let dualOption = CaptureHotkey(
+    public static let dualOption = CaptureHotkey(
         kind: .dualOption,
         keyCode: nil,
         modifierRawValue: NSEvent.ModifierFlags.option.rawValue,
         keyDisplay: nil
     )
 
-    static let supportedModifiers: NSEvent.ModifierFlags = [.command, .option, .control, .shift]
+    public static let supportedModifiers: NSEvent.ModifierFlags = [.command, .option, .control, .shift]
 
-    var modifiers: NSEvent.ModifierFlags {
+    public var modifiers: NSEvent.ModifierFlags {
         NSEvent.ModifierFlags(rawValue: modifierRawValue).intersection(Self.supportedModifiers)
     }
 
-    var displayName: String {
+    public var displayName: String {
         if kind == .dualOption { return "Left ⌥ + Right ⌥" }
         return modifierSymbols + (keyDisplay ?? "Key")
     }
 
-    var compactDisplayName: String {
+    public var compactDisplayName: String {
         if kind == .dualOption { return "L⌥ + R⌥" }
         return displayName
     }
 
-    func matchesKeyDown(_ event: NSEvent) -> Bool {
+    public func matchesKeyDown(_ event: NSEvent) -> Bool {
         guard kind == .keyboard, let keyCode else { return false }
         let eventModifiers = event.modifierFlags.intersection(Self.supportedModifiers)
         return event.keyCode == keyCode && eventModifiers == modifiers && !event.isARepeat
     }
 
-    static func keyboard(event: NSEvent) -> CaptureHotkey? {
+    public static func keyboard(event: NSEvent) -> CaptureHotkey? {
         let modifiers = event.modifierFlags.intersection(supportedModifiers)
         guard isAllowedModifierCombination(modifiers) else { return nil }
 
@@ -53,7 +53,7 @@ struct CaptureHotkey: Codable, Equatable {
         )
     }
 
-    static func isReserved(_ hotkey: CaptureHotkey) -> Bool {
+    public static func isReserved(_ hotkey: CaptureHotkey) -> Bool {
         guard hotkey.kind == .keyboard,
             let keyCode = hotkey.keyCode
         else { return false }
@@ -70,7 +70,7 @@ struct CaptureHotkey: Codable, Equatable {
         }
     }
 
-    static func isAllowed(_ hotkey: CaptureHotkey) -> Bool {
+    public static func isAllowed(_ hotkey: CaptureHotkey) -> Bool {
         hotkey.kind == .dualOption
             || (hotkey.kind == .keyboard && hotkey.keyCode != nil
                 && isAllowedModifierCombination(hotkey.modifiers) && !isReserved(hotkey))

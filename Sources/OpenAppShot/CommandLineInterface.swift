@@ -2,6 +2,7 @@ import AppKit
 import ApplicationServices
 import Foundation
 import ImageIO
+import OpenAppShotCore
 import UniformTypeIdentifiers
 
 private func runningApplication(from arguments: [String]) -> NSRunningApplication? {

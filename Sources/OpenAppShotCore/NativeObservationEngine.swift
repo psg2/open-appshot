@@ -5,12 +5,14 @@ import ImageIO
 import ScreenCaptureKit
 import UniformTypeIdentifiers
 
-final class NativeObservationEngine {
+public final class NativeObservationEngine {
     private let fileManager = FileManager.default
     private let contentTimeout: DispatchTimeInterval = .seconds(5)
     private let screenshotTimeout: DispatchTimeInterval = .seconds(5)
 
-    func observe(application: NSRunningApplication, captureDirectory: URL) throws -> ObservationResult {
+    public init() {}
+
+    public func observe(application: NSRunningApplication, captureDirectory: URL) throws -> ObservationResult {
         _ = NSApplication.shared
         let appName = application.localizedName ?? application.bundleIdentifier ?? "PID \(application.processIdentifier)"
         let accessibilityWindows = AXWindowReader.windows(for: application.processIdentifier)
@@ -122,16 +124,13 @@ final class NativeObservationEngine {
         guard !windows.isEmpty else { throw ObservationEngineError.noWindow(appName) }
         if windows.count == 1 { return windows[0] }
 
-        let focused = accessibilityWindows.first(where: \.isFocused)
-        if let focused {
-            let ranked =
-                windows
-                .map { ($0, screenWindowConfidence($0, accessibilityWindow: focused)) }
-                .filter(\.1.isQualified)
-                .sorted { $0.1.score > $1.1.score }
-            if let best = ranked.first, isUnambiguous(best: best.1, second: ranked.dropFirst().first?.1) {
-                return best.0
-            }
+        if let focused = accessibilityWindows.first(where: \.isFocused),
+            let index = WindowMatching.bestMatch(
+                screenWindows: windows.map(\.matchingWindow),
+                accessibilityWindow: focused.matchingWindow
+            )
+        {
+            return windows[index]
         }
 
         let active = windows.filter(\.isActive)
@@ -140,67 +139,10 @@ final class NativeObservationEngine {
     }
 
     private func preferredAccessibilityWindow(for window: SCWindow, in windows: [AXWindowDescriptor]) -> AXWindowDescriptor? {
-        let ranked =
-            windows
-            .map { ($0, accessibilityWindowConfidence($0, screenWindow: window)) }
-            .filter(\.1.isQualified)
-            .sorted { $0.1.score > $1.1.score }
-        guard let best = ranked.first,
-            isUnambiguous(best: best.1, second: ranked.dropFirst().first?.1)
-        else { return nil }
-        return best.0
-    }
-
-    private func screenWindowConfidence(
-        _ window: SCWindow,
-        accessibilityWindow: AXWindowDescriptor
-    ) -> WindowMatchConfidence {
-        windowMatchConfidence(
-            screenTitle: window.title,
-            screenBounds: window.frame,
-            accessibilityWindow: accessibilityWindow
-        )
-    }
-
-    private func accessibilityWindowConfidence(
-        _ descriptor: AXWindowDescriptor,
-        screenWindow: SCWindow
-    ) -> WindowMatchConfidence {
-        windowMatchConfidence(
-            screenTitle: screenWindow.title,
-            screenBounds: screenWindow.frame,
-            accessibilityWindow: descriptor
-        )
-    }
-
-    private func windowMatchConfidence(
-        screenTitle: String?,
-        screenBounds: CGRect,
-        accessibilityWindow: AXWindowDescriptor
-    ) -> WindowMatchConfidence {
-        let geometry = rectangleSimilarity(screenBounds, accessibilityWindow.bounds)
-        let titleMatches = screenTitle?.nonEmpty.map { accessibilityWindow.title == $0 } ?? false
-        let isQualified = geometry >= 0.80 || (titleMatches && geometry >= 0.50)
-        let score = geometry + (titleMatches ? 1.0 : 0) + (accessibilityWindow.isFocused ? 0.25 : 0)
-        return WindowMatchConfidence(score: score, isQualified: isQualified)
-    }
-
-    private func isUnambiguous(
-        best: WindowMatchConfidence,
-        second: WindowMatchConfidence?
-    ) -> Bool {
-        guard best.isQualified else { return false }
-        guard let second else { return true }
-        return best.score - second.score >= 0.15
-    }
-
-    private func rectangleSimilarity(_ lhs: CGRect, _ rhs: CGRect) -> Double {
-        guard lhs.width > 0, lhs.height > 0, rhs.width > 0, rhs.height > 0 else { return 0 }
-        let intersection = lhs.intersection(rhs)
-        guard !intersection.isNull else { return 0 }
-        let intersectionArea = intersection.width * intersection.height
-        let unionArea = lhs.width * lhs.height + rhs.width * rhs.height - intersectionArea
-        return unionArea > 0 ? intersectionArea / unionArea : 0
+        WindowMatching.bestMatch(
+            accessibilityWindows: windows.map(\.matchingWindow),
+            screenWindow: window.matchingWindow
+        ).map { windows[$0] }
     }
 
     private func writePNG(_ image: CGImage, to url: URL) throws {
@@ -230,11 +172,6 @@ final class NativeObservationEngine {
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try encoder.encode(inventory).write(to: url, options: .atomic)
     }
-}
-
-private struct WindowMatchConfidence {
-    let score: Double
-    let isQualified: Bool
 }
 
 private final class CallbackResultBox<Value>: @unchecked Sendable {
@@ -277,6 +214,16 @@ private struct AXWindowDescriptor {
     let title: String
     let bounds: CGRect
     let isFocused: Bool
+
+    var matchingWindow: WindowMatching.Window {
+        WindowMatching.Window(title: title, bounds: bounds, isFocused: isFocused)
+    }
+}
+
+extension SCWindow {
+    fileprivate var matchingWindow: WindowMatching.Window {
+        WindowMatching.Window(title: title, bounds: frame)
+    }
 }
 
 private enum AXWindowReader {

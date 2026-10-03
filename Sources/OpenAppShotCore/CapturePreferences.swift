@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 
-enum CapturePreferences {
+public enum CapturePreferences {
     private static let defaults = UserDefaults.standard
     private static let captureDirectoryKey = "captureDirectoryPath"
     private static let storageContainerKey = "captureStorageContainerPath"
@@ -14,7 +14,7 @@ enum CapturePreferences {
     private static let confirmBeforeDeletingKey = "confirmBeforeDeleting"
     private static let clipboardModeKey = "clipboardMode"
 
-    static var defaultCaptureRootURL: URL {
+    public static var defaultCaptureRootURL: URL {
         let applicationSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         return
             applicationSupport
@@ -22,11 +22,11 @@ enum CapturePreferences {
             .appendingPathComponent("Captures", isDirectory: true)
     }
 
-    static var legacyCaptureRootURL: URL {
+    public static var legacyCaptureRootURL: URL {
         URL(fileURLWithPath: "/tmp/AppShotClipboardPOC", isDirectory: true)
     }
 
-    static var captureRootURL: URL {
+    public static var captureRootURL: URL {
         guard let path = defaults.string(forKey: storageContainerKey), !path.isEmpty else {
             return defaultCaptureRootURL
         }
@@ -35,11 +35,11 @@ enum CapturePreferences {
             .appendingPathComponent("Captures", isDirectory: true)
     }
 
-    static var storageContainerPath: String? {
+    public static var storageContainerPath: String? {
         defaults.string(forKey: storageContainerKey)
     }
 
-    static var knownCaptureRootURLs: [URL] {
+    public static var knownCaptureRootURLs: [URL] {
         let stored = defaults.stringArray(forKey: knownCaptureRootsKey) ?? []
         return uniqueURLs(
             stored.map { URL(fileURLWithPath: $0, isDirectory: true) }
@@ -47,7 +47,7 @@ enum CapturePreferences {
         )
     }
 
-    static func selectStorageContainer(_ path: String?) {
+    public static func selectStorageContainer(_ path: String?) {
         rememberCaptureRoot(captureRootURL)
         if let path, !path.isEmpty {
             defaults.set(path, forKey: storageContainerKey)
@@ -57,11 +57,11 @@ enum CapturePreferences {
         rememberCaptureRoot(captureRootURL)
     }
 
-    static var storageContainerURL: URL? {
+    public static var storageContainerURL: URL? {
         storageContainerPath.map { URL(fileURLWithPath: $0, isDirectory: true) }
     }
 
-    static var legacyCustomCaptureRootURL: URL? {
+    public static var legacyCustomCaptureRootURL: URL? {
         guard let path = defaults.string(forKey: captureDirectoryKey), !path.isEmpty else { return nil }
         return URL(fileURLWithPath: path, isDirectory: true)
     }
@@ -79,7 +79,7 @@ enum CapturePreferences {
         return urls.filter { seen.insert($0.standardizedFileURL.path).inserted }
     }
 
-    static var retentionDays: Int {
+    public static var retentionDays: Int {
         get {
             guard defaults.object(forKey: retentionDaysKey) != nil else { return 30 }
             return defaults.integer(forKey: retentionDaysKey)
@@ -87,7 +87,7 @@ enum CapturePreferences {
         set { defaults.set(newValue, forKey: retentionDaysKey) }
     }
 
-    static var copyAfterCapture: Bool {
+    public static var copyAfterCapture: Bool {
         get {
             guard defaults.object(forKey: copyAfterCaptureKey) != nil else { return true }
             return defaults.bool(forKey: copyAfterCaptureKey)
@@ -95,7 +95,7 @@ enum CapturePreferences {
         set { defaults.set(newValue, forKey: copyAfterCaptureKey) }
     }
 
-    static var captureSound: CaptureSound {
+    public static var captureSound: CaptureSound {
         get {
             if let stored = defaults.string(forKey: captureSoundKey), let sound = CaptureSound(rawValue: stored) {
                 return sound
@@ -108,7 +108,7 @@ enum CapturePreferences {
         set { defaults.set(newValue.rawValue, forKey: captureSoundKey) }
     }
 
-    static var captureHotkey: CaptureHotkey {
+    public static var captureHotkey: CaptureHotkey {
         get {
             guard let data = defaults.data(forKey: captureHotkeyKey),
                 let hotkey = try? JSONDecoder().decode(CaptureHotkey.self, from: data),
@@ -122,7 +122,7 @@ enum CapturePreferences {
         }
     }
 
-    static var confirmBeforeDeleting: Bool {
+    public static var confirmBeforeDeleting: Bool {
         get {
             guard defaults.object(forKey: confirmBeforeDeletingKey) != nil else { return true }
             return defaults.bool(forKey: confirmBeforeDeletingKey)
@@ -130,7 +130,7 @@ enum CapturePreferences {
         set { defaults.set(newValue, forKey: confirmBeforeDeletingKey) }
     }
 
-    static var clipboardMode: ClipboardMode {
+    public static var clipboardMode: ClipboardMode {
         get {
             guard let stored = defaults.string(forKey: clipboardModeKey),
                 let mode = ClipboardMode(rawValue: stored)
