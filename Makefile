@@ -14,10 +14,10 @@ hooks: ## Install the repository Git hooks
 	lefthook install
 
 format: ## Rewrite Swift sources with swift-format
-	xcrun swift-format format --configuration .swift-format --in-place --recursive Sources Tests
+	xcrun swift-format format --configuration .swift-format --in-place --recursive Sources Tests Package.swift
 
 format-check: ## Verify Swift formatting without changing files
-	xcrun swift-format lint --configuration .swift-format --strict --recursive Sources Tests
+	xcrun swift-format lint --configuration .swift-format --strict --recursive Sources Tests Package.swift
 
 lint-shell: ## Check Bash scripts with ShellCheck
 	shellcheck Scripts/*.sh
@@ -60,4 +60,4 @@ package-release: ## Build, sign, notarize, and package a universal release
 	./Scripts/package-release.sh
 
 clean: ## Remove generated build artifacts
-	rm -rf build
+	rm -rf build .build

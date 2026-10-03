@@ -11,3 +11,4 @@ build/
 *.provisionprofile
 *.mobileprovision
 *.log
+.build/

@@ -169,6 +169,7 @@ One pasteboard item advertises all representations for the selected mode. A rece
 ## Repository layout
 
 ```text
+Package.swift                       Swift package manifest used by Scripts/build.sh
 Sources/OpenAppShot/AppModel.swift  History, permissions, storage, and UI state
 Sources/OpenAppShot/CaptureStorage.swift  Capture ownership and safe retention
 Sources/OpenAppShot/Views.swift     Native SwiftUI windows and settings

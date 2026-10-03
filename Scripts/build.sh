@@ -49,19 +49,23 @@ OPEN_APPSHOT_ICON_BUILD_ROOT="$STAGING_ROOT" "$SCRIPT_DIR/build-icon.sh" >/dev/n
 
 thin_binaries=()
 for architecture in $ARCHITECTURES; do
+  triple="$architecture-apple-macosx$DEPLOYMENT_TARGET"
+  # Each architecture keeps its own scratch directory so incremental builds stay valid.
+  scratch_path="$REPO_ROOT/.build/release-$architecture"
+  swift build \
+    --package-path "$REPO_ROOT" \
+    --scratch-path "$scratch_path" \
+    --configuration release \
+    --product OpenAppShot \
+    --triple "$triple" >&2
+  bin_path=$(swift build \
+    --package-path "$REPO_ROOT" \
+    --scratch-path "$scratch_path" \
+    --configuration release \
+    --triple "$triple" \
+    --show-bin-path)
   thin_binary="$STAGING_ROOT/OpenAppShot-$architecture"
-  xcrun swiftc \
-    -O \
-    -warnings-as-errors \
-    -target "$architecture-apple-macosx$DEPLOYMENT_TARGET" \
-    -framework AppKit \
-    -framework ApplicationServices \
-    -framework ImageIO \
-    -framework ScreenCaptureKit \
-    -framework SwiftUI \
-    -framework UniformTypeIdentifiers \
-    "$REPO_ROOT/Sources/OpenAppShot/"*.swift \
-    -o "$thin_binary"
+  cp "$bin_path/OpenAppShot" "$thin_binary"
   thin_binaries+=("$thin_binary")
 done
 
