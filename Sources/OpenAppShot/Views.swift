@@ -623,6 +623,20 @@ struct OpenAppShotSettingsView: View {
             }
 
             Section {
+                Toggle(
+                    "Open at login",
+                    isOn: Binding(
+                        get: { model.openAtLogin },
+                        set: { model.setOpenAtLogin($0) }
+                    )
+                )
+            } header: {
+                Text("Startup")
+            } footer: {
+                Text("At login, Open AppShot starts in the menu bar without opening its window.")
+            }
+
+            Section {
                 Picker("Keep captures", selection: $model.retentionDays) {
                     Text("1 day").tag(1)
                     Text("7 days").tag(7)
