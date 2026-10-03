@@ -14,13 +14,13 @@ before_directories=$(mktemp)
 current_directories=$(mktemp)
 
 if [[ ! -x "$INSTALLED_BINARY" ]]; then
-  echo "Install the app first with: make install" >&2
+  echo "Install the app first with: mise run install" >&2
   exit 1
 fi
 if [[ ! -x "$BUILT_BINARY" ]] \
   || ! cmp -s "$BUILT_BINARY" "$INSTALLED_BINARY" \
   || ! cmp -s "$BUILT_APP/Contents/Info.plist" "$INSTALLED_APP/Contents/Info.plist"; then
-  echo "The installed app does not match the current build. Run: make install" >&2
+  echo "The installed app does not match the current build. Run: mise run install" >&2
   exit 1
 fi
 

@@ -4,3 +4,77 @@ gitleaks = "8.30.1"
 jq = "1.7.1"
 lefthook = "2.1.12"
 shellcheck = "0.11.0"
+
+[tasks.hooks]
+description = "Install the repository Git hooks"
+run = "lefthook install"
+
+[tasks.format]
+description = "Rewrite Swift sources with swift-format"
+run = "xcrun swift-format format --configuration .swift-format --in-place --recursive Sources Tests Package.swift"
+
+[tasks."lint:swift"]
+description = "Verify Swift formatting without changing files"
+run = "xcrun swift-format lint --configuration .swift-format --strict --recursive Sources Tests Package.swift"
+
+[tasks."lint:shell"]
+description = "Check Bash scripts with ShellCheck"
+run = "shellcheck Scripts/*.sh"
+
+[tasks."lint:actions"]
+description = "Check GitHub Actions workflows"
+run = "actionlint"
+
+[tasks."lint:plist"]
+description = "Validate the application property list"
+run = "plutil -lint Resources/Info.plist"
+
+[tasks.lint]
+description = "Run static checks"
+depends = ["lint:*"]
+
+[tasks.test]
+description = "Run unit tests, then the bundle and command-line contract tests"
+run = ["swift test", "./Scripts/test.sh"]
+
+[tasks.ci]
+description = "Run the same quality gates as GitHub Actions"
+depends = ["lint", "test"]
+
+[tasks.scan-secrets]
+description = "Scan the working tree and complete Git history with Gitleaks"
+run = ["gitleaks dir --redact --verbose .", "gitleaks git --redact --verbose ."]
+
+[tasks.check]
+description = "Run every local publication gate"
+depends = ["ci", "scan-secrets"]
+
+[tasks.build]
+description = "Build and ad hoc sign the app bundle"
+run = "./Scripts/build.sh"
+
+[tasks.install]
+description = "Install the current build in /Applications"
+run = "./Scripts/install-local.sh"
+
+[tasks.uninstall]
+description = "Remove the installed app but keep captures, preferences, and permissions"
+run = "./Scripts/uninstall-local.sh --app"
+
+[tasks.smoke]
+description = "Capture a fixture window and check every clipboard mode (needs macOS permissions)"
+depends = ["build"]
+run = "./Scripts/smoke-test.sh"
+
+[tasks.hotkey-smoke]
+description = "Install the current sources and trigger a real global-hotkey capture (needs permissions)"
+depends = ["install"]
+run = "./Scripts/hotkey-smoke-test.sh"
+
+[tasks.package-release]
+description = "Package a universal release (Developer ID, or OPEN_APPSHOT_RELEASE_SIGNING=adhoc)"
+run = "./Scripts/package-release.sh"
+
+[tasks.clean]
+description = "Remove generated build artifacts"
+run = "rm -rf build .build"

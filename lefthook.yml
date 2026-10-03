@@ -1,14 +1,5 @@
-# Install with `make hooks`. Use LEFTHOOK=0 only for emergencies.
+# Install with `mise run hooks`. Use LEFTHOOK=0 only for emergencies.
 pre-push:
-  piped: true
   jobs:
     - name: publication gates
-      group:
-        parallel: true
-        jobs:
-          - name: lint
-            run: make lint
-          - name: test
-            run: make test
-          - name: scan-secrets
-            run: make scan-secrets
+      run: mise run check
