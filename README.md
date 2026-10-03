@@ -6,6 +6,8 @@ Open AppShot installs as a universal `Open AppShot.app` for Apple Silicon and In
 
 The installed bundle and executable are named Open AppShot. The app currently keeps the legacy bundle identifier `com.psg2.AppShotClipboardPOC`. A Mac that granted permissions to an early identifier-only development build must reset those grants before using a release build; see [Reset migrated permissions](#reset-migrated-permissions).
 
+![Open AppShot main window with a captured Calculator window and its capture history](docs/images/main-window.png)
+
 ## Install a release
 
 1. Download `OpenAppShot-X.Y.Z-macos-universal.zip` and its `.sha256` file from the same [GitHub release](https://github.com/psg2/open-appshot/releases/latest).
@@ -210,7 +212,7 @@ Scripts/                            Build, install, and observable smoke tests
 Tests/OpenAppShotCoreTests/         Unit tests for the OpenAppShotCore library
 Tests/Fixtures/                     Deterministic capture target
 Tests/Support/                      Synthetic configurable-hotkey event
-docs/                               Architecture and prototype findings
+docs/                               Architecture, release process, and README images
 .github/workflows/ci.yml            Secret scanning and macOS quality gates
 .github/workflows/release.yml       Tag-triggered universal release with checksum
 VERSION                             Release version used by the build and release workflow
