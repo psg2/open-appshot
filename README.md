@@ -1,231 +1,137 @@
 # Open AppShot
 
-Open AppShot captures the last active macOS window as pixels and Accessibility context. It keeps a local history and writes both representations to the clipboard for use in any chat or agent UI.
+Open AppShot captures the last active macOS window as a screenshot plus its Accessibility tree, keeps a local history, and copies both to the clipboard. Paste the result into a chat or coding agent and it gets the pixels and the readable UI structure: buttons, labels, values, and their positions.
 
-Open AppShot installs as a universal `Open AppShot.app` for Apple Silicon and Intel Macs. It has configurable clipboard modes, global and in-app shortcuts, capture history, safe retention, and a configurable deletion confirmation. Command-W closes the window without quitting the capture service. The app remains capture-only. It cannot click, type, scroll, or invoke UI actions.
-
-The installed bundle and executable are named Open AppShot. The app currently keeps the legacy bundle identifier `com.psg2.AppShotClipboardPOC`. A Mac that granted permissions to an early identifier-only development build must reset those grants before using a release build; see [Reset migrated permissions](#reset-migrated-permissions).
+It only observes. It can't click, type, scroll, or trigger actions in the captured app, and it never uploads anything.
 
 ![Open AppShot main window with a captured Calculator window and its capture history](docs/images/main-window.png)
 
-## Install a release
+## Install
 
-1. Download `OpenAppShot-X.Y.Z-macos-universal.zip` and its `.sha256` file from the same [GitHub release](https://github.com/psg2/open-appshot/releases/latest).
-2. In the download folder, verify the archive before extracting it:
+Open AppShot needs macOS 15 or later. Releases are universal, for Apple Silicon and Intel.
+
+1. Download `OpenAppShot-X.Y.Z-macos-universal.zip` and the matching `.sha256` file from the [latest release](https://github.com/psg2/open-appshot/releases/latest).
+2. Verify the archive in the download folder. The output must end in `OK`.
 
    ```sh
    shasum -a 256 -c OpenAppShot-X.Y.Z-macos-universal.zip.sha256
    ```
 
-   The result must end in `OK`. This checks the archive against the published checksum. It isn't Apple notarization.
-3. Unzip the archive and move **Open AppShot.app** to Applications.
-4. Open the app. Releases are ad hoc signed, not Developer ID signed or notarized, so macOS blocks the first launch. Open **System Settings > Privacy & Security**, find the message about Open AppShot, and choose **Open Anyway**. Apple describes this in [Open a Mac app from an unknown developer](https://support.apple.com/en-us/102445). Keep Gatekeeper enabled.
-5. Grant Accessibility and Screen Recording as described in [First run](#first-run).
+3. Unzip it and move **Open AppShot.app** to Applications.
+4. Open the app. Releases are ad hoc signed, not notarized, so macOS blocks the first launch. Go to **System Settings > Privacy & Security** and choose **Open Anyway** next to the Open AppShot message. Apple explains this in [Open a Mac app from an unknown developer](https://support.apple.com/en-us/102445).
 
-macOS ties Accessibility and Screen Recording grants to the exact ad hoc signed binary. After installing a new version, remove the old Open AppShot entries in **Privacy & Security** and grant both permissions again. `./Scripts/uninstall-local.sh --reset-permissions` resets them from a source checkout.
+The checksum proves the archive matches the release. It isn't an Apple notarization check.
 
-## Build from source
+### Grant permissions
 
-### Requirements
+Open AppShot needs two permissions:
 
-- macOS 15 or later
-- Xcode 16 or later with Swift
-- [mise](https://mise.jdx.dev/) for pinned repository tools
+- **Accessibility**, for the global shortcut and to read the window's UI tree.
+- **Screen Recording**, for the window pixels.
 
-Install the repository quality tools:
+Choose **Request Permissions** in the app's banner or **Request Missing Permissions** in Settings. Then enable Open AppShot under **System Settings > Privacy & Security** and reopen the app if macOS asks.
 
-```sh
-mise install
-```
+macOS ties both grants to the exact ad hoc signed binary. After you install a new version, remove the old Open AppShot entries in **Privacy & Security** and grant them again.
 
-### Build and install
+## Use
 
-```sh
-mise run build
-mise run smoke
-mise run install
-```
+Focus the window you want to share and press **Left Option + Right Option** together. The capture appears at the top of the history and lands on the clipboard. The default avoids Left Command + Right Command, which the Codex desktop app already uses. You can record another shortcut in Settings.
 
-`mise run smoke` launches a deterministic local fixture behind normal windows and captures it through ScreenCaptureKit and Accessibility. It checks that the window fills the PNG without shadow padding, then verifies the Accessibility JSON, history metadata, private file permissions, and every clipboard mode. Peekaboo is not required.
+Open AppShot lives in the menu bar. Command-W closes the window, and the shortcut keeps working. The menu bar icon reopens the history, captures immediately, or opens Settings.
 
-The fixture runs behind normal windows without a Dock icon and is removed when the test exits. It is never included in the application bundle. Local ad hoc builds use their code hash as identity; the repository does not offer an identifier-only signing mode.
+The main window lists captures on the left. On the right, **Screenshot** shows the window pixels and **Accessibility** shows the redacted UI summary. The bar underneath shows the image size, the number of Accessibility elements, and the storage folder.
 
-After installation, exercise the real global-hotkey path:
+| Shortcut | Action |
+| --- | --- |
+| Shift-Command-C | Capture the last active window |
+| Option-Command-C | Copy the selected capture with the current clipboard mode |
+| Option-Command-I | Copy only the screenshot |
+| Option-Command-T | Copy only the Accessibility text |
+| Shift-Command-R | Reveal the capture in Finder |
+| Command-R | Reload the history |
+| Delete | Delete the selected capture |
 
-```sh
-mise run hotkey-smoke
-```
+Settings (Command-comma) covers permissions, the capture shortcut, the confirmation sound, the clipboard mode, automatic copy, the capture folder, retention, delete confirmation, and **Open at login**. A launch at login starts in the menu bar without opening the window.
 
-`mise run hotkey-smoke` installs the current sources before exercising the global shortcut, so it cannot pass against a stale app in `/Applications`.
+### Clipboard modes
 
-## Development quality gates
+| Mode | What it copies |
+| --- | --- |
+| Image + Full Accessibility (default) | The PNG, readable text for every element, and redacted JSON under `com.psg2.appshot-context-json` |
+| Image + File References | The PNG and the local paths of `screenshot.png`, `accessibility.json`, and `context.md`. Useful for agents that read local files |
+| Image Only | The PNG |
+| Accessibility Only | The readable text and the JSON |
 
-Install the same local tools used by CI and enable the pre-push hook:
-
-```sh
-mise install
-mise run hooks
-```
-
-The main commands are:
-
-```sh
-mise run format        # rewrite Swift sources with swift-format
-mise run lint          # swift-format, ShellCheck, actionlint, and plist checks
-mise run test          # unit tests, then CI-safe bundle and command-line contract tests
-mise run scan-secrets  # full-history Gitleaks scan
-mise run check         # all publication gates above
-```
-
-`mise run test` does not need Accessibility or Screen Recording access. The capture and global-hotkey smoke tests remain local because GitHub-hosted runners cannot grant those macOS permissions.
-
-## First run
-
-1. Open `/Applications/Open AppShot.app`.
-2. In the permission banner or Settings, choose **Request Missing Permissions**.
-3. Enable Open AppShot under System Settings > Privacy & Security > Accessibility and Screen & System Audio Recording.
-4. Quit and reopen the app if macOS requests it.
-5. Focus the window you want to share.
-6. Press **Left Option + Right Option** together, or use the shortcut configured in Settings.
-
-The capture appears at the top of the history and is copied to the clipboard by default. The Codex desktop app already owns Left Command + Right Command, so Open AppShot defaults to the two Option keys to avoid triggering both apps.
-
-## Native app
-
-The main window has a capture filmstrip on the left and two previews on the right:
-
-- **Screenshot** shows the exact window pixels.
-- **Accessibility** shows the readable, redacted AX summary.
-
-The context rail under the preview reports the image dimensions, AX element count, and storage source. The toolbar can capture the last active window, reload history, copy either representation, reveal the capture in Finder, or delete it. Hover or select a capture in the sidebar to reveal its delete button. By default, Enter confirms the deletion dialog and Escape cancels it.
-
-Open AppShot lives in the menu bar instead of the Dock. Command-W closes its current window while leaving the global shortcut active. Use the menu bar icon to reopen the history, capture immediately, or open Settings.
-
-The Capture menu exposes the window commands and their shortcuts:
-
-- Shift-Command-C captures the last active window;
-- Option-Command-C copies the selected capture using the configured clipboard mode;
-- Option-Command-I copies the selected screenshot;
-- Option-Command-T copies the selected Accessibility context;
-- Shift-Command-R reveals the selected capture in Finder;
-- Command-R reloads the history;
-- Delete asks to remove the selected capture.
-
-Open Settings with Command-comma to:
-
-- inspect both macOS permissions;
-- record a custom global shortcut or restore the two-Option default;
-- choose or disable the confirmation sound and preview it;
-- choose a capture folder;
-- keep captures for 1, 7, 30, or 90 days, or forever;
-- choose whether Delete and the trash button ask for confirmation;
-- control automatic clipboard copy and choose its content;
-- open Open AppShot at login. A launch at login starts in the menu bar without opening the window.
+All representations go into one pasteboard item, and each app picks what it accepts. Slack pastes both the image and the text. Some chat apps, including the Codex and Claude desktop apps, take only the text. To get both there, paste the screenshot and the text separately with Option-Command-I and Option-Command-T.
 
 ## Storage and privacy
 
-Default captures go to:
+Captures live in `~/Library/Application Support/Open AppShot/Captures/`. If you choose another folder, Open AppShot creates an `Open AppShot/Captures` folder inside it and keeps showing captures from folders you used before.
 
-```text
-~/Library/Application Support/Open AppShot/Captures/<capture-id>/
-```
+Each capture is a folder with mode `0700`, and its files use `0600`:
 
-When you choose a custom destination, Open AppShot creates its own `Open AppShot/Captures` subdirectory beneath it. The app remembers every 0.5-or-later capture root you selected, keeps those captures in history, and applies retention to each root. Retention never deletes arbitrary children of the folder you selected: it removes only validated Open AppShot capture directories. The app also shows captures from the default folder and strictly recognized POC locations. Unverified legacy items are read-only.
+- `screenshot.png` and `thumbnail.png`
+- `accessibility.json`, the structured Accessibility tree
+- `context.md`, the readable summary that goes on the clipboard
+- `metadata.json` and a `.open-appshot-capture` ownership marker
+- `windows.json`, which records the selected window
 
-Each capture contains:
+The Accessibility output redacts secure and password fields. If no Accessibility window clearly matches the captured window, the output says so and stays empty. Open AppShot never falls back to another window. A screenshot still contains anything visible in the window.
 
-- `screenshot.png`
-- `thumbnail.png`
-- `accessibility.json`
-- `context.md`
-- `metadata.json`
-- `.open-appshot-capture` ownership marker
-- selected-window diagnostic metadata
+Retention deletes captures after 1, 7, 30, or 90 days, or never. It only deletes folders that carry the ownership marker or the exact layout of an older capture, and it leaves unrelated files and symbolic links alone. Captures are written to a hidden staging folder and move into the history only when complete.
 
-Directories use mode `0700` and files use `0600`. Secure Accessibility values are redacted. If the captured ScreenCaptureKit window cannot be confidently paired with an Accessibility window, AX output is marked incomplete instead of falling back to another window or the entire application. Open AppShot does not use OCR, AI providers, telemetry, or network upload. A screenshot can still contain anything visibly present in the selected window.
+Open AppShot doesn't use OCR, AI services, telemetry, or the network.
 
-Captures are written to a hidden staging directory and moved into history only after every required file is complete. A failed capture removes its staging data instead of leaving a hidden screenshot behind.
+## Uninstall
 
-## Uninstalling
+From a source checkout, this removes the app and keeps captures, preferences, and permissions:
 
-The default uninstall keeps captures, preferences, and permissions:
-
-```bash
+```sh
 mise run uninstall
 ```
 
-Removal of sensitive data and TCC grants is explicit:
+Removing data or permissions is explicit:
 
-```bash
-./Scripts/uninstall-local.sh --data
+```sh
+./Scripts/uninstall-local.sh --data                # verified Open AppShot captures only
 ./Scripts/uninstall-local.sh --preferences
-./Scripts/uninstall-local.sh --reset-permissions
+./Scripts/uninstall-local.sh --reset-permissions   # Accessibility and Screen Recording grants
 ./Scripts/uninstall-local.sh --all
 ```
 
-The script stops the capture service before changing app state. `--data` removes only capture directories with verified Open AppShot ownership from known roots and the fixed POC temporary directory. It preserves unrelated files even inside those roots and never recursively removes the arbitrary custom root used by older versions.
-Run `mise run build` first if no current build exists; data removal never delegates ownership checks to a potentially old installed binary.
+`--data` checks ownership with the current sources, so run `mise run build` first if you have no build.
 
-## Reset migrated permissions
+## Build from source
 
-Early local builds used an identifier-only ad hoc requirement. If this Mac granted Accessibility or Screen Recording to one of those builds, reset the old grants before trusting a Developer ID release:
+You need macOS 15, Xcode 16 or later, and [mise](https://mise.jdx.dev/). mise installs the pinned tools and defines every task. `mise tasks` lists them.
 
-```bash
-./Scripts/uninstall-local.sh --reset-permissions
+```sh
+mise install
+mise run hooks     # pre-push hook that runs `mise run check`
+mise run build
+mise run install   # build and copy to /Applications
 ```
 
-Open the signed app afterward and grant both permissions again. This reset is intentionally never run during installation.
+| Task | What it does |
+| --- | --- |
+| `format` | Rewrite Swift sources with swift-format |
+| `lint` | swift-format, ShellCheck, actionlint, and plist checks |
+| `test` | Unit tests, then the bundle and command-line contract tests |
+| `scan-secrets` | Gitleaks on the working tree and the full history |
+| `check` | All of the above. CI runs the same gates |
+| `smoke` | Capture a fixture window and check every clipboard mode |
+| `hotkey-smoke` | Install the app and trigger a real global-shortcut capture |
 
-## Clipboard modes
+`test` needs no macOS permissions. `smoke` and `hotkey-smoke` need Accessibility and Screen Recording, so they only run locally. Run them when you change capture behavior.
 
-The selected clipboard mode controls automatic copies and the main Copy command:
+## Architecture
 
-- **Image + Full Accessibility** writes `public.png`, readable text for every captured element, and redacted structured JSON under `com.psg2.appshot-context-json`.
-- **Image + File References** writes `public.png` and compact text with absolute local paths to `screenshot.png`, `accessibility.json`, and `context.md`. It does not place the full Accessibility content on the clipboard.
-- **Image Only** writes `public.png` without text or Accessibility JSON.
-- **Accessibility Only** writes the readable text and structured JSON without image pixels.
+`OpenAppShotCore` holds the capture pipeline, storage, and clipboard logic, and the `OpenAppShot` target holds the menu bar app. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) describes the capture path and the storage rules. [CONTEXT.md](CONTEXT.md) defines the terms used in the code.
 
-One pasteboard item advertises all representations for the selected mode. A receiving chat may still choose only one representation. The explicit image-only and Accessibility-only capture actions remain available without changing Settings.
+## Release
 
-## Repository layout
+Pushing a `vX.Y.Z` tag that matches `VERSION` builds, tests, and publishes a universal ad hoc signed release with a checksum. See [docs/RELEASING.md](docs/RELEASING.md).
 
-```text
-Package.swift                       Swift package manifest used by Scripts/build.sh
-Sources/OpenAppShot/main.swift      Entry point: command-line commands, then the app
-Sources/OpenAppShot/AppDelegate.swift  Menu bar, main menu, and global hotkey
-Sources/OpenAppShot/CommandLineInterface.swift  Command-line contract used by scripts and tests
-Sources/OpenAppShotCore/CaptureEngine.swift  Capture pipeline, staging, and context text
-Sources/OpenAppShotCore/ClipboardWriter.swift  Clipboard modes and pasteboard output
-Sources/OpenAppShotCore/NativeObservationEngine.swift  ScreenCaptureKit and AX capture
-Sources/OpenAppShotCore/ObservationModels.swift  Native observation result models
-Sources/OpenAppShotCore/CaptureStorage.swift  Capture ownership and safe retention
-Sources/OpenAppShotCore/CaptureHistory.swift  History loading, including legacy captures
-Sources/OpenAppShotCore/CapturePreferences.swift  User defaults and storage roots
-Sources/OpenAppShotCore/CaptureHotkey.swift  Hotkey model and validation
-Sources/OpenAppShotCore/WindowMatching.swift  Pairs captured windows with Accessibility windows
-Sources/OpenAppShot/AppModel.swift  Observable UI state and actions
-Sources/OpenAppShot/Views.swift     Native SwiftUI windows and settings
-Resources/Info.plist                Bundle identity and permission descriptions
-Resources/AppIcon.png               1024-pixel source for the native app icon
-CONTEXT.md                           Canonical capture and clipboard vocabulary
-Scripts/                            Build, install, and observable smoke tests
-Tests/OpenAppShotCoreTests/         Unit tests for the OpenAppShotCore library
-Tests/Fixtures/                     Deterministic capture target
-Tests/Support/                      Synthetic configurable-hotkey event
-docs/                               Architecture, release process, and README images
-.github/workflows/ci.yml            Secret scanning and macOS quality gates
-.github/workflows/release.yml       Tag-triggered universal release with checksum
-VERSION                             Release version used by the build and release workflow
-mise.toml                           Pinned tools and every repository task (`mise tasks`)
-lefthook.yml                        Local pre-push quality gates
-```
+## License
 
-Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the current boundaries, [docs/PROTOTYPE-VERDICT.md](docs/PROTOTYPE-VERDICT.md) for the original experiment results, and [docs/RELEASING.md](docs/RELEASING.md) for the publication checklist.
-
-## Current project status
-
-- CI, local hooks, formatting, linting, contract tests, Gitleaks, issue templates, and security guidance are ready.
-- The source is available under the MIT License.
-- The repository is hosted at [psg2/open-appshot](https://github.com/psg2/open-appshot).
-- Normal local builds use a code-hash-bound ad hoc identity. The repository has no weak identifier-only signing mode.
-- Pushing a `vX.Y.Z` tag publishes a universal ad hoc signed release with a SHA-256 checksum. `mise run package-release` also supports Developer ID signing and notarization once credentials exist; see [docs/RELEASING.md](docs/RELEASING.md).
+[MIT](LICENSE)

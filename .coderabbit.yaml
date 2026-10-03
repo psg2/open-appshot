@@ -14,8 +14,9 @@ reviews:
   path_filters:
     - "!Resources/AppIcon.png"
     - "!build/**"
+    - "!.build/**"
   path_instructions:
-    - path: "Sources/OpenAppShot/**"
+    - path: "Sources/**"
       instructions: |
         This is a native macOS capture-only application. Flag changes that
         expand from observation into UI control, weaken capture file
