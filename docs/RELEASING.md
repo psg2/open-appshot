@@ -4,7 +4,7 @@ Releases are built by `.github/workflows/release.yml` when a `vX.Y.Z` tag is pus
 
 ## Repository setup
 
-1. Require the `Secrets Scan`, `Format · Lint · Build · Test`, `Minimum macOS 15 (macos-15)`, and `Minimum macOS 15 (macos-15-intel)` checks on `main`.
+1. Require the `Secrets Scan`, `Format · Lint · Build · Test`, `Minimum macOS (macos-15)`, and `Minimum macOS (macos-15-intel)` checks on `main`.
 2. Enable private vulnerability reporting and Dependabot security alerts.
 3. On every machine that used the POC, run `./Scripts/uninstall-local.sh --reset-permissions` before granting permissions to a release build.
 

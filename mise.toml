@@ -11,11 +11,11 @@ run = "lefthook install"
 
 [tasks.format]
 description = "Rewrite Swift sources with swift-format"
-run = "xcrun swift-format format --configuration .swift-format --in-place --recursive Sources Tests Package.swift"
+run = "swift format format --configuration .swift-format --in-place --recursive Sources Tests Package.swift"
 
 [tasks."lint:swift"]
 description = "Verify Swift formatting without changing files"
-run = "xcrun swift-format lint --configuration .swift-format --strict --recursive Sources Tests Package.swift"
+run = "swift format lint --configuration .swift-format --strict --recursive Sources Tests Package.swift"
 
 [tasks."lint:shell"]
 description = "Check Bash scripts with ShellCheck"

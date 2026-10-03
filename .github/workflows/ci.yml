@@ -60,7 +60,7 @@ jobs:
         run: mise run ci
 
   minimum-macos:
-    name: Minimum macOS 15 (${{ matrix.runner }})
+    name: Minimum macOS (${{ matrix.runner }})
     strategy:
       fail-fast: false
       matrix:
