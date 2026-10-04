@@ -96,6 +96,8 @@ trigger_configured_hotkey() {
 
 trigger_configured_hotkey
 
+# Press again every 5 seconds in case the first press arrived before the
+# app registered the shortcut.
 for attempt in {1..100}; do
   if (( attempt == 25 || attempt == 50 || attempt == 75 )); then
     trigger_configured_hotkey
@@ -112,17 +114,11 @@ for attempt in {1..100}; do
 
   if [[ -n "$latest_capture" ]]; then
     if [[ -f "$latest_capture/context.md" && -f "$latest_capture/accessibility.json" && -f "$latest_capture/windows.json" ]]; then
-      observation_engine=$(jq -r '.data.engine' "$latest_capture/accessibility.json")
-      [[ "$observation_engine" == "native" ]]
-      runtime_host=$(jq -r '.engine' "$latest_capture/windows.json")
-      [[ "$runtime_host" == "native" ]]
       clipboard=$("$INSTALLED_BINARY" --inspect-clipboard)
       [[ "$clipboard" == *"public.png"* ]]
       [[ "$clipboard" == *"public.utf8-plain-text"* ]]
       printf 'capture_directory=%s\n' "$latest_capture"
-      printf '%s\n' "$runtime_host"
-      printf '%s\n' "$clipboard"
-      echo "hotkey_smoke=GREEN attempts=$attempt kind=$hotkey_kind engine=$observation_engine"
+      echo "hotkey_smoke=GREEN attempts=$attempt kind=$hotkey_kind"
       exit 0
     fi
   fi

@@ -1,6 +1,6 @@
 # Releasing Open AppShot
 
-Releases are built by `.github/workflows/release.yml` when a `vX.Y.Z` tag is pushed. The workflow checks that the tag matches `VERSION`, runs `mise run test`, packages a universal ad hoc signed archive with `Scripts/package-release.sh`, and publishes the ZIP and its `.sha256` file with `docs/release-notes.md` as the release notes. Only the release job has `contents: write`.
+Releases are built by `.github/workflows/release.yml` when a `vX.Y.Z` tag is pushed. The workflow checks that the tag matches `VERSION`, runs `mise run ci` on macOS 26, packages a universal ad hoc signed archive with `mise run package-release`, and publishes the ZIP and its `.sha256` file with `docs/release-notes.md` as the release notes. Only the release job has `contents: write`.
 
 ## Repository setup
 

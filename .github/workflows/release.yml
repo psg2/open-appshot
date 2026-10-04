@@ -20,7 +20,7 @@ concurrency:
 jobs:
   release:
     name: Build and publish release
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 30
     permissions:
       contents: write
@@ -40,13 +40,13 @@ jobs:
       - name: Install pinned repository tools
         uses: jdx/mise-action@7a4e45a543138629540c9a1616d08632b893e492 # v5.0.1
 
-      - name: Run unit and contract tests
-        run: mise run test
+      - name: Run publication gates
+        run: mise run ci
 
       - name: Package universal ad hoc release
         env:
           OPEN_APPSHOT_RELEASE_SIGNING: adhoc
-        run: ./Scripts/package-release.sh
+        run: mise run package-release
 
       - name: Publish release assets
         env:
