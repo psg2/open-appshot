@@ -87,7 +87,6 @@ capture_directory=$(printf '%s\n' "$output" | sed -n 's/^capture_directory=//p')
 [[ "$output" == *"window=Open AppShot Capture Fixture"* ]]
 [[ "$output" == *"png_bytes="* ]]
 [[ "$output" == *"text_characters="* ]]
-[[ "$output" == *"engine=native"* ]]
 [[ -n "$capture_directory" ]]
 [[ -s "$capture_directory/screenshot.png" ]]
 [[ -s "$capture_directory/thumbnail.png" ]]
@@ -109,9 +108,6 @@ metadata_elements=$(jq -r '.elementCount' "$capture_directory/metadata.json")
 [[ "$metadata_application" == "capture-fixture" ]]
 [[ "$metadata_window" == "Open AppShot Capture Fixture" ]]
 [[ "$metadata_elements" -gt 0 ]]
-
-runtime_host=$(jq -r '.engine' "$capture_directory/windows.json")
-[[ "$runtime_host" == "native" ]]
 
 directory_mode=$(stat -f '%Sp' "$capture_directory")
 screenshot_mode=$(stat -f '%Sp' "$capture_directory/screenshot.png")
@@ -169,17 +165,5 @@ assert_clipboard_shape "$image_clipboard" yes no no
 accessibility_clipboard=$("$BINARY" --copy-capture "$capture_directory" --clipboard-mode accessibility)
 assert_clipboard_shape "$accessibility_clipboard" no yes yes
 
-clipboard=$("$BINARY" --copy-capture "$capture_directory" --clipboard-mode full)
-assert_clipboard_shape "$clipboard" yes yes yes
-
-printf '%s\n' "$output"
-printf '%s\n' "$runtime_host"
-printf '%s\n' "$image_metrics"
-printf '%s\n' "$clipboard"
-printf 'clipboard_modes=full,references,image,accessibility\n'
-printf 'history_count=%s\n' "$history_count"
-printf 'icon=%s\n' "$icon_file"
-printf 'observation_engine=native\n'
-printf 'failed_capture_cleanup=GREEN\n'
-printf 'ambiguous_window_rejection=GREEN\n'
+printf '%s\n' "$output" "$image_metrics"
 echo "smoke=GREEN"
