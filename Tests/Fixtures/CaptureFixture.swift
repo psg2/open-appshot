@@ -19,6 +19,11 @@ final class FixtureDelegate: NSObject, NSApplicationDelegate {
             duplicate.setFrameOrigin(window.frame.origin)
             duplicate.orderBack(nil)
             windows.append(duplicate)
+            if !runsInBackground {
+                // Lets the smoke test check which of the identical windows a capture selected.
+                print("front_window_id=\(window.windowNumber)")
+                fflush(stdout)
+            }
         }
     }
 
