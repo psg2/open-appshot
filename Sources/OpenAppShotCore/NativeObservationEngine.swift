@@ -26,6 +26,7 @@ public final class NativeObservationEngine {
         let window = try preferredWindow(
             in: candidates,
             accessibilityWindows: accessibilityWindows,
+            applicationIsActive: application.isActive,
             appName: appName
         )
 
@@ -119,6 +120,7 @@ public final class NativeObservationEngine {
     private func preferredWindow(
         in windows: [SCWindow],
         accessibilityWindows: [AXWindowDescriptor],
+        applicationIsActive: Bool,
         appName: String
     ) throws -> SCWindow {
         guard !windows.isEmpty else { throw ObservationEngineError.noWindow(appName) }
@@ -134,8 +136,25 @@ public final class NativeObservationEngine {
         }
 
         let active = windows.filter(\.isActive)
-        guard active.count == 1 else { throw ObservationEngineError.ambiguousWindow(appName) }
-        return active[0]
+        if active.count == 1 { return active[0] }
+
+        // The active app's frontmost window is its focused one, even when another window shares its title and frame.
+        if applicationIsActive, let frontmost = Self.frontmost(of: windows) { return frontmost }
+        throw ObservationEngineError.ambiguousWindow(appName)
+    }
+
+    /// The window listed first in the window server's front-to-back order of on-screen windows.
+    private static func frontmost(of windows: [SCWindow]) -> SCWindow? {
+        let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
+        guard let list = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else { return nil }
+        for info in list {
+            if let number = info[kCGWindowNumber as String] as? CGWindowID,
+                let window = windows.first(where: { $0.windowID == number })
+            {
+                return window
+            }
+        }
+        return nil
     }
 
     private func preferredAccessibilityWindow(for window: SCWindow, in windows: [AXWindowDescriptor]) -> AXWindowDescriptor? {
