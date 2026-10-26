@@ -11,6 +11,7 @@ IMAGE_INSPECTOR="$REPO_ROOT/build/inspect-image"
 capture_directory=""
 no_window_fixture_pid=""
 ambiguous_fixture_pid=""
+active_ambiguous_fixture_pid=""
 
 if [[ ! -x "$BINARY" || ! -s "$ICON" ]]; then
   "$SCRIPT_DIR/build.sh"
@@ -48,6 +49,10 @@ cleanup() {
   if [[ -n "$ambiguous_fixture_pid" ]]; then
     kill "$ambiguous_fixture_pid" 2>/dev/null || true
     wait "$ambiguous_fixture_pid" 2>/dev/null || true
+  fi
+  if [[ -n "$active_ambiguous_fixture_pid" ]]; then
+    kill "$active_ambiguous_fixture_pid" 2>/dev/null || true
+    wait "$active_ambiguous_fixture_pid" 2>/dev/null || true
   fi
   if [[ -n "$capture_directory" && -d "$capture_directory" ]]; then
     case "$capture_directory" in
@@ -145,6 +150,20 @@ grep -Fq 'could not identify one active window' "$REPO_ROOT/build/ambiguous.stde
 after_ambiguous_capture=$(find "$CAPTURE_ROOT" -mindepth 1 -maxdepth 1 -print | sort)
 [[ "$before_ambiguous_capture" == "$after_ambiguous_capture" ]]
 [[ -z "$(find "$CAPTURE_ROOT" -mindepth 1 -maxdepth 1 -name '.staging-*' -print -quit)" ]]
+
+# An active app's frontmost window wins over an identical window behind it.
+"$FIXTURE_BINARY" --ambiguous-windows &
+active_ambiguous_fixture_pid=$!
+sleep 1
+# macOS may refuse to activate the fixture while another app holds focus, so check only when it is frontmost.
+frontmost_pid=$(lsappinfo info -only pid "$(lsappinfo front)" | sed -n 's/.*=//p')
+if [[ "$frontmost_pid" == "$active_ambiguous_fixture_pid" ]]; then
+  active_ambiguous_output=$("$BINARY" --capture-once --pid "$active_ambiguous_fixture_pid" --clipboard-mode full)
+  [[ "$active_ambiguous_output" == *"window=Open AppShot Capture Fixture"* ]]
+  echo "active_ambiguous_capture=GREEN"
+else
+  echo "active_ambiguous_capture=SKIPPED (fixture did not become frontmost)"
+fi
 
 history_count=$("$BINARY" --history-count)
 [[ "$history_count" -gt 0 ]]
